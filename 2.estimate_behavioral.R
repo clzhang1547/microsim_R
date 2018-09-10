@@ -2,10 +2,12 @@
 # regressions to produce coefficient estimates (which are stored as csv files)
 # to be used in the simulation model.
 
+cat("\014")  
 library("dplyr")
 library("survey")
 
 df <- read.csv("fmla_clean_2012.csv")
+
 
 # ---------------------------------------------------------------------------------------------------------
 # 0. Define Functions
@@ -24,7 +26,8 @@ runEstimate <- function(x,y,z,lname){
   complete <- mapply(runLogit, x = x, y = y, z = z, SIMPLIFY = FALSE)
   
   # Extract Coefficient Estimates
-  estimates <- sapply(complete, coef)
+	# switched to lapply, sapply was giving me errors for specif that were all the same functional form
+  estimates <- lapply(complete, coef)
   
   # Save
   for (i in 1:length(estimates)){
@@ -283,3 +286,46 @@ runLogit <- function(x,y,z){
 
 # Run Estimation
 runEstimate(specif,conditional,weight,"paygroup")
+
+
+# adding missing regressions
+
+# ---------------------------------------------------------------------------------------------------------
+# 9. Would take leave if pay available
+# ---------------------------------------------------------------------------------------------------------
+
+# specifications
+specif <- c(own = "unaffordable ~ lnfaminc",
+                      illspouse = "unaffordable ~ lnfaminc",
+                      illchild = "unaffordable ~ lnfaminc",
+                      illparent = "unaffordable ~ lnfaminc",
+                      matdis = "unaffordable ~ lnfaminc",
+                      bond = "unaffordable ~ lnfaminc")
+
+# subsetting data
+conditional <- c(own = "need_own == 1",
+                           illspouse = "need_illspouse == 1",
+                           illchild = "need_illchild == 1",
+                           illparent = "need_illparent == 1",
+                           matdis = "need_matdis == 1",
+                           bond = "need_bond == 1")
+
+# weights
+weight <- c(own = "~ fixed_weight",
+                      illspouse = "~ fixed_weight",
+                      illchild = "~ fixed_weight",
+                      illparent = "~ fixed_weight",
+                      matdis = "~ fixed_weight",
+                      bond = "~ fixed_weight")
+
+runLogit <- function(x,y,z){
+  des <- svydesign(id = ~1,  weights = as.formula(z), data = df %>% filter_(y))
+  svyglm(as.formula(x),data = df %>% filter_(y),family = "quasibinomial",design = des)
+}
+
+
+# Run Estimation
+runEstimate(specif,conditional,weight,"unaffordable")
+
+
+

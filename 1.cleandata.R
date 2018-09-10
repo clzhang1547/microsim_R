@@ -1,10 +1,13 @@
 #########################################################################
 ########## MICROSIMULATION LEAVE ANALYSIS: PRE PROCESSING DATA ##########
 #########################################################################
-
+cat("\014")  
 rm(list=ls())
 
-if(!require(dplyr)) install.packages("dplyr")
+this.dir <- dirname(parent.frame(2)$ofile)
+setwd(this.dir)
+
+if(!require(dplyr)) install.packages("dplyr",dependencies=TRUE, repos='http://cran.rstudio.com/')
 
 library("dplyr")
 
@@ -131,6 +134,8 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(length = ifelse(is.na(A20) == 0 & 
                                               lnlength = log(length),
                                               lnlengthsq = lnlength^2)
 
+
+
 # any pay received
 fmla_2012_clean <- fmla_2012_clean %>% mutate(anypay = ifelse(A45 == 1, 1, 0))
 
@@ -168,6 +173,7 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(fixed_weight = ifelse(LEAVE_CAT ==
 # (1) taking a leave
 # (2) needing a leave
 # (3) taking or needing a leave
+# (4) length of most recent leave
 
 # maternity disability
 fmla_2012_clean <- fmla_2012_clean %>% mutate(take_matdis = ifelse((A5_1_CAT == 21 & A11_1 == 1 & GENDER_CAT == 2) | A5_1_CAT_rev == 32, 1, 0),
@@ -183,6 +189,9 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(need_matdis = ifelse((B6_1_CAT == 
 fmla_2012_clean <- fmla_2012_clean %>% mutate(type_matdis = ifelse((take_matdis == 1 | need_matdis == 1),1,0),
                                               type_matdis = ifelse((is.na(take_matdis) == 1 | is.na(need_matdis) == 1),NA,type_matdis))
 
+fmla_2012_clean <- fmla_2012_clean %>% mutate(length_matdis = ifelse(type_matdis==1,length, 0))
+
+
 # new child/bond
 fmla_2012_clean <- fmla_2012_clean %>% mutate(take_bond = ifelse(A5_1_CAT==21 & (is.na(A11_1) == 1 | GENDER_CAT == 1 | (GENDER_CAT==2 & A11_1==2 & A5_1_CAT_rev!=32)),1,0),
                                               take_bond = ifelse(is.na(A5_1_CAT) == 1, NA, take_bond),
@@ -194,7 +203,10 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(need_bond = ifelse(B6_1_CAT==21 & 
 
 fmla_2012_clean <- fmla_2012_clean %>% mutate(type_bond = ifelse((take_bond == 1 | need_bond == 1),1,0),
                                               type_bond = ifelse((is.na(take_bond) == 1 | is.na(need_bond) == 1),NA,type_bond))
-odie = fmla_2012_clean %>% select(take_bond)
+
+fmla_2012_clean <- fmla_2012_clean %>% mutate(length_bond = ifelse(type_bond==1,length, 0))
+
+#odie = fmla_2012_clean %>% select(take_bond)
 # own health
 fmla_2012_clean <- fmla_2012_clean %>% mutate(take_own = ifelse(reason_take == 1,1,0),
                                               take_own = ifelse(is.na(take_own) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0,take_own))
@@ -204,6 +216,8 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(need_own = ifelse(B6_1_CAT == 1,1,
 
 fmla_2012_clean <- fmla_2012_clean %>% mutate(type_own = ifelse((take_own == 1 | need_own == 1),1,0),
                                               type_own = ifelse((is.na(take_own) == 1 | is.na(need_own) == 1),NA,type_own))
+
+fmla_2012_clean <- fmla_2012_clean %>% mutate(length_own = ifelse(type_own==1,length, 0))
 
 #ill child
 fmla_2012_clean <- fmla_2012_clean %>% mutate(take_illchild = ifelse(reason_take == 11,1,0),
@@ -215,6 +229,8 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(need_illchild = ifelse(B6_1_CAT ==
 fmla_2012_clean <- fmla_2012_clean %>% mutate(type_illchild = ifelse((take_illchild == 1 | need_illchild == 1),1,0),
                                               type_illchild = ifelse((is.na(take_illchild) == 1 | is.na(need_illchild) == 1),NA,type_illchild))
 
+fmla_2012_clean <- fmla_2012_clean %>% mutate(length_illchild = ifelse(type_illchild==1,length, 0))
+
 #ill spouse
 fmla_2012_clean <- fmla_2012_clean %>% mutate(take_illspouse = ifelse(reason_take == 12,1,0),
                                               take_illspouse = ifelse(is.na(take_illspouse) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0,take_illspouse))
@@ -225,6 +241,8 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(need_illspouse = ifelse(B6_1_CAT =
 fmla_2012_clean <- fmla_2012_clean %>% mutate(type_illspouse = ifelse((take_illspouse == 1 | need_illspouse == 1),1,0),
                                               type_illspouse = ifelse((is.na(take_illspouse) == 1 | is.na(need_illspouse) == 1),NA,type_illspouse))
 
+fmla_2012_clean <- fmla_2012_clean %>% mutate(length_illspouse = ifelse(type_illspouse==1,length, 0))
+
 #ill parent
 fmla_2012_clean <- fmla_2012_clean %>% mutate(take_illparent = ifelse(reason_take == 13,1,0),
                                               take_illparent = ifelse(is.na(take_illparent) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0,take_illparent))
@@ -234,6 +252,9 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(need_illparent = ifelse(B6_1_CAT =
 
 fmla_2012_clean <- fmla_2012_clean %>% mutate(type_illparent = ifelse((take_illparent == 1 | need_illparent == 1),1,0),
                                               type_illparent = ifelse((is.na(take_illparent) == 1 | is.na(need_illparent) == 1),NA,type_illparent))
+
+fmla_2012_clean <- fmla_2012_clean %>% mutate(length_illparent = ifelse(type_illparent==1,length, 0))
+
 # saving data
 write.csv(fmla_2012_clean, file = "fmla_clean_2012.csv", row.names = FALSE)
 

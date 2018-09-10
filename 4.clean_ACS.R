@@ -1,0 +1,124 @@
+
+# """
+# This program loads in the raw ACS files, creates the necessary variables
+# for the simulation and saves a master dataset to be used in the simulations.
+# 
+# This is replicating the counterpart file in from Python
+# 
+# 9 Sept 2018
+# Luke
+# 
+# To do:
+# - The biggest missing piece is the imputation of ACS variables using the CPS. These are currently just randomly generated.
+# - Check if the ACS variables are the same as those in the C++ code
+# 
+# """
+
+cat("\014")  
+this.dir <- dirname(parent.frame(2)$ofile)
+setwd(this.dir)
+
+library("dplyr")
+library("survey")
+library("dummies")
+
+# -------------------------- #
+# ACS Household File
+# -------------------------- #
+
+# load file
+d_hh <- read.csv("ss15hma_short.csv")
+
+# create variables
+
+d_hh$nochildren <- as.data.frame(dummy("FPARC",d_hh))$FPARC4
+d_hh$lnfaminc <- log(d_hh$FINCP)
+
+# -------------------------- #
+# ACS Person File
+# -------------------------- #
+
+# load file
+d <- read.csv("ss15pma_short.csv")
+ 
+# merge with household level vars 
+d <- merge(d,d_hh[c("SERIALNO","nochildren","lnfaminc")], by="SERIALNO")
+
+# rename ACS vars to be consistent with FMLA data
+d$age <- d$AGEP
+d$a_age <- d$AGEP
+
+# create new ACS vars
+
+
+# marital status
+d$widowed <- as.data.frame(dummy("MAR",d))$MAR2
+d$divorced <- as.data.frame(dummy("MAR",d))$MAR3
+d$separated <- as.data.frame(dummy("MAR",d))$MAR4
+d$nevermarried <- as.data.frame(dummy("MAR",d))$MAR5
+
+#gender
+d$male <- as.data.frame(dummy("SEX",d))$SEX1
+d$female <- 1-d$male
+
+#age
+d$agesq <- d$age ** 2
+
+# ed level
+d <- d %>% mutate(ltHS=ifelse(SCHL<=15,1,0)) 
+d <- d %>% mutate(someCol=ifelse(SCHL>=18 & SCHL<=20,1,0)) 
+d <- d %>% mutate(BA =ifelse(SCHL==21,1,0)) 
+d <- d %>% mutate(GradSch=ifelse(SCHL>=22,1,0)) 
+  
+#race
+d <- d %>% mutate(black=ifelse(RAC1P==2,1,0)) 
+d <- d %>% mutate(white=ifelse(RAC1P==1,1,0)) 
+d <- d %>% mutate(asian=ifelse(RAC1P==6,1,0)) 
+d <- d %>% mutate(hisp=ifelse(HISP>=2,1,0)) 
+
+
+# occupation
+d <- d %>% mutate(occ_1 = ifelse(OCCP10>=10 & OCCP10<=950,1,0),
+                    occ_2 = ifelse(OCCP10>=1000 & OCCP10<=3540,1,0),
+                    occ_3 = ifelse(OCCP10>=3600 & OCCP10<=4650,1,0),
+                    occ_4 = ifelse(OCCP10>=4700 & OCCP10<=4965,1,0),
+                    occ_5 = ifelse(OCCP10>=5000 & OCCP10<=5940,1,0),
+                    occ_6 = ifelse(OCCP10>=6000 & OCCP10<=6130,1,0),
+                    occ_7 = ifelse(OCCP10>=6200 & OCCP10<=6940,1,0),
+                    occ_8 = ifelse(OCCP10>=7000 & OCCP10<=7630,1,0),
+                    occ_9 = ifelse(OCCP10>=7700 & OCCP10<=8965,1,0),
+                    occ_10 = ifelse(OCCP10>=9000 & OCCP10<=9750,1,0))
+
+# industry
+d <- d %>% mutate(  ind_1 = ifelse(INDP>=170 & INDP<=290 ,1,0),
+                    ind_2 = ifelse(INDP>=370 & INDP<=490 ,1,0),
+                    ind_3 = ifelse(INDP==770 ,1,0),
+                    ind_4 = ifelse(INDP>=1070 & INDP<=3990 ,1,0),
+                    ind_5 = ifelse(INDP>=4070 & INDP<=5790 ,1,0),
+                    ind_6 = ifelse(INDP>=6070 & INDP<=6390 ,1,0),
+                    ind_7 = ifelse((INDP>=6470 & INDP<=6780)|(INDP>=570 & INDP<=690) ,1,0),
+                    ind_8 = ifelse(INDP>=6870 & INDP<=7190 ,1,0),
+                    ind_9 = ifelse(INDP>=7270 & INDP<=7790 ,1,0),
+                    ind_10 = ifelse(INDP>=7860 & INDP<=8470 ,1,0),
+                    ind_11 = ifelse(INDP>=8560 & INDP<=8690 ,1,0),
+                    ind_12 = ifelse(INDP>=8770 & INDP<=9290 ,1,0),
+                    ind_13 = ifelse(INDP>=9370 & INDP<=9590 ,1,0))
+
+# -------------------------- #
+# Remove ineligible workers
+# -------------------------- #
+
+# Restrict dataset to civilian employed workers (check this)
+d <- subset(d, ESR==1|ESR==2)
+
+#  Restrict dataset to those that are not self-employed
+d <- subset(d, COW!=6 & COW!=7)
+
+# -------------------------- #
+# Save the resulting dataset
+# -------------------------- #
+
+# id variable
+d$id = rownames(d)
+
+write.csv(d, file = "ACS_clean.csv", row.names = FALSE)
