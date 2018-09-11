@@ -17,6 +17,10 @@ library("dplyr")
 
 fmla_2012 <- read.csv("fmla_2012_employee_restrict_puf.csv")
 
+# --------------------------------------------------------------------
+# demographic characteristics
+# --------------------------------------------------------------------
+
 # FMLA eligible worker
 fmla_2012_clean <- fmla_2012 %>% mutate(eligworker = ifelse(E13 == 1 & (E14 == 1 | (E15_CAT >= 5 & E15_CAT <= 8)),1,0))
 
@@ -96,6 +100,9 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(raceth = ifelse(is.na(D5) == 0 & D
                                               white = ifelse(raceth == 5,1,0),
                                               other = ifelse(raceth == 6,1,0),
                                               hisp = ifelse(raceth == 7,1,0))
+# --------------------------------------------------------------------
+# leave characteristics
+# --------------------------------------------------------------------
 
 # leave reason for most recent leave
 fmla_2012_clean <- fmla_2012_clean %>% mutate(reason_take = ifelse(is.na(A20) == 0 & A20 == 2,A5_2_CAT,A5_1_CAT))
@@ -134,19 +141,9 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(length = ifelse(is.na(A20) == 0 & 
                                               lnlength = log(length),
                                               lnlengthsq = lnlength^2)
 
-
-
-# any pay received
-fmla_2012_clean <- fmla_2012_clean %>% mutate(anypay = ifelse(A45 == 1, 1, 0))
-
-# state program
-fmla_2012_clean <- fmla_2012_clean %>% mutate(recStateFL = ifelse(A48b == 1, 1, 0),
-                                              recStateFL = ifelse(is.na(recStateFL) == 1 & anypay == 0, 0, recStateFL))
-
-fmla_2012_clean <- fmla_2012_clean %>% mutate(recStateDL = ifelse(A48c == 1, 1, 0),
-                                              recStateDL = ifelse(is.na(recStateDL) == 1 & anypay == 0, 0, recStateDL))
-
-fmla_2012_clean <- fmla_2012_clean %>% mutate(recStatePay = ifelse(recStateFL == 1 | recStateDL == 1, 1, 0))
+# --------------------------
+# Benefits and pay received
+# --------------------------
 
 # fully paid
 fmla_2012_clean <- fmla_2012_clean %>% mutate(fullyPaid = ifelse(A49 == 1, 1, 0))
@@ -156,6 +153,41 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(longerLeave = ifelse(A55 == 1, 1, 
 
 # could not afford to take leave
 fmla_2012_clean <- fmla_2012_clean %>% mutate(unaffordable = ifelse(B15_1_CAT == 5, 1, 0))
+
+# any pay received
+fmla_2012_clean <- fmla_2012_clean %>% mutate(anypay = ifelse(A45 == 1, 1, 0))
+
+# proportion of pay received (mid point of ranges provided in FMLA)
+fmla_2012_clean <- fmla_2012_clean %>% mutate(prop_pay = ifelse(A45 == 2, 0, NA),
+                                              prop_pay = ifelse(A50 == 1, .125, prop_pay),
+                                              prop_pay = ifelse(A50 == 2, .375, prop_pay),
+                                              prop_pay = ifelse(A50 == 3, .5, prop_pay),
+                                              prop_pay = ifelse(A50 == 4, .625, prop_pay),
+                                              prop_pay = ifelse(A50 == 5, .875, prop_pay),
+                                              prop_pay = ifelse(A49 == 1, 1, prop_pay))
+
+# Leave Program Participation
+# baseline is absence of program, so this will start as False
+fmla_2012_clean <- fmla_2012_clean %>% mutate(particip = FALSE)
+
+# Benefits received as proportion of pay
+# baseline is just employer-provided pay
+fmla_2012_clean <- fmla_2012_clean %>% mutate(benefit_prop = prop_pay)
+
+# Cost to program as proportion of pay
+# baseline is 0
+fmla_2012_clean <- fmla_2012_clean %>% mutate(cost_prop = 0)
+
+# state program
+# think about incorporating?
+fmla_2012_clean <- fmla_2012_clean %>% mutate(recStateFL = ifelse(A48b == 1, 1, 0),
+                                              recStateFL = ifelse(is.na(recStateFL) == 1 & anypay == 0, 0, recStateFL))
+
+fmla_2012_clean <- fmla_2012_clean %>% mutate(recStateDL = ifelse(A48c == 1, 1, 0),
+                                              recStateDL = ifelse(is.na(recStateDL) == 1 & anypay == 0, 0, recStateDL))
+
+fmla_2012_clean <- fmla_2012_clean %>% mutate(recStatePay = ifelse(recStateFL == 1 | recStateDL == 1, 1, 0))
+
 
 # weights
 w_emp <- fmla_2012_clean %>% filter(LEAVE_CAT == 3) %>% summarise(w_emp = mean(weight))
@@ -169,7 +201,7 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(fixed_weight = ifelse(LEAVE_CAT ==
 # dummies for leave type 
 # --------------------------
 
-# there are three variables for each leave type:
+# there are four variables for each leave type:
 # (1) taking a leave
 # (2) needing a leave
 # (3) taking or needing a leave
@@ -254,6 +286,8 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(type_illparent = ifelse((take_illp
                                               type_illparent = ifelse((is.na(take_illparent) == 1 | is.na(need_illparent) == 1),NA,type_illparent))
 
 fmla_2012_clean <- fmla_2012_clean %>% mutate(length_illparent = ifelse(type_illparent==1,length, 0))
+
+
 
 # saving data
 write.csv(fmla_2012_clean, file = "fmla_clean_2012.csv", row.names = FALSE)
