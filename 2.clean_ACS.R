@@ -13,7 +13,7 @@
 # - Check if the ACS variables are the same as those in the C++ code
 # 
 # """
-
+rm(list=ls())
 cat("\014")  
 this.dir <- dirname(parent.frame(2)$ofile)
 setwd(this.dir)
@@ -28,11 +28,14 @@ library("dummies")
 
 # load file
 d_hh <- read.csv("ss15hma_short.csv")
+#d_hh <- read.csv("ss16hca.csv")
 
 # create variables
 
 d_hh$nochildren <- as.data.frame(dummy("FPARC",d_hh))$FPARC4
+d_hh$faminc <- d_hh$FINCP
 d_hh$lnfaminc <- log(d_hh$FINCP)
+
 
 # -------------------------- #
 # ACS Person File
@@ -40,9 +43,12 @@ d_hh$lnfaminc <- log(d_hh$FINCP)
 
 # load file
 d <- read.csv("ss15pma_short.csv")
- 
+#d <- read.csv("ss16pca.csv")
+
+# sample for memory issues
+
 # merge with household level vars 
-d <- merge(d,d_hh[c("SERIALNO","nochildren","lnfaminc")], by="SERIALNO")
+d <- merge(d,d_hh[c("SERIALNO","nochildren","lnfaminc","faminc")], by="SERIALNO")
 
 # rename ACS vars to be consistent with FMLA data
 d$age <- d$AGEP
@@ -65,6 +71,7 @@ d$female <- 1-d$male
 d$agesq <- d$age ** 2
 
 # ed level
+d <- d %>% mutate(SCHL=ifelse(is.na(SCHL),0,SCHL)) 
 d <- d %>% mutate(ltHS=ifelse(SCHL<=15,1,0)) 
 d <- d %>% mutate(someCol=ifelse(SCHL>=18 & SCHL<=20,1,0)) 
 d <- d %>% mutate(BA =ifelse(SCHL==21,1,0)) 
@@ -78,16 +85,17 @@ d <- d %>% mutate(hisp=ifelse(HISP>=2,1,0))
 
 
 # occupation
-d <- d %>% mutate(occ_1 = ifelse(OCCP10>=10 & OCCP10<=950,1,0),
-                    occ_2 = ifelse(OCCP10>=1000 & OCCP10<=3540,1,0),
-                    occ_3 = ifelse(OCCP10>=3600 & OCCP10<=4650,1,0),
-                    occ_4 = ifelse(OCCP10>=4700 & OCCP10<=4965,1,0),
-                    occ_5 = ifelse(OCCP10>=5000 & OCCP10<=5940,1,0),
-                    occ_6 = ifelse(OCCP10>=6000 & OCCP10<=6130,1,0),
-                    occ_7 = ifelse(OCCP10>=6200 & OCCP10<=6940,1,0),
-                    occ_8 = ifelse(OCCP10>=7000 & OCCP10<=7630,1,0),
-                    occ_9 = ifelse(OCCP10>=7700 & OCCP10<=8965,1,0),
-                    occ_10 = ifelse(OCCP10>=9000 & OCCP10<=9750,1,0))
+d$OCCP <- d$OCCP10 
+d <- d %>% mutate(occ_1 = ifelse(OCCP>=10 & OCCP<=950,1,0),
+                    occ_2 = ifelse(OCCP>=1000 & OCCP<=3540,1,0),
+                    occ_3 = ifelse(OCCP>=3600 & OCCP<=4650,1,0),
+                    occ_4 = ifelse(OCCP>=4700 & OCCP<=4965,1,0),
+                    occ_5 = ifelse(OCCP>=5000 & OCCP<=5940,1,0),
+                    occ_6 = ifelse(OCCP>=6000 & OCCP<=6130,1,0),
+                    occ_7 = ifelse(OCCP>=6200 & OCCP<=6940,1,0),
+                    occ_8 = ifelse(OCCP>=7000 & OCCP<=7630,1,0),
+                    occ_9 = ifelse(OCCP>=7700 & OCCP<=8965,1,0),
+                    occ_10 = ifelse(OCCP>=9000 & OCCP<=9750,1,0))
 
 # industry
 d <- d %>% mutate(  ind_1 = ifelse(INDP>=170 & INDP<=290 ,1,0),
@@ -104,6 +112,8 @@ d <- d %>% mutate(  ind_1 = ifelse(INDP>=170 & INDP<=290 ,1,0),
                     ind_12 = ifelse(INDP>=8770 & INDP<=9290 ,1,0),
                     ind_13 = ifelse(INDP>=9370 & INDP<=9590 ,1,0))
 
+
+
 # -------------------------- #
 # Remove ineligible workers
 # -------------------------- #
@@ -119,6 +129,6 @@ d <- subset(d, COW!=6 & COW!=7)
 # -------------------------- #
 
 # id variable
-d$id = rownames(d)
+d$empid = rownames(d)
 
 write.csv(d, file = "ACS_clean.csv", row.names = FALSE)
