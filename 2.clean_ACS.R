@@ -29,6 +29,7 @@ library("dummies")
 # load file
 d_hh <- read.csv("ss15hma_short.csv")
 #d_hh <- read.csv("ss16hca.csv")
+#d_hh <- read.csv("ss15hma.csv")
 
 # create variables
 
@@ -44,8 +45,10 @@ d_hh$lnfaminc <- log(d_hh$FINCP)
 # load file
 d <- read.csv("ss15pma_short.csv")
 #d <- read.csv("ss16pca.csv")
+#d <- read.csv("ss15pma.csv")
 
-# sample for memory issues
+# sample for runtime issues
+d <- n_sample(d, 10000)
 
 # merge with household level vars 
 d <- merge(d,d_hh[c("SERIALNO","nochildren","lnfaminc","faminc")], by="SERIALNO")
@@ -132,3 +135,4 @@ d <- subset(d, COW!=6 & COW!=7)
 d$empid = rownames(d)
 
 write.csv(d, file = "ACS_clean.csv", row.names = FALSE)
+#write.csv(d, file = "Mass_ACS_clean.csv", row.names = FALSE)

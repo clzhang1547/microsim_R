@@ -133,6 +133,46 @@ runImpute <- function(d_in, estimates, lname,tcond) {
   return(d)
 }
 
+# functions to randomly draw from distribution of variable in data set
+
+RandDraw <- function(d_train,d_test,y,z,test_cond) {
+
+  # filter fmla cases
+  d_temp <- d_train %>% filter_(z)
+  train <- d_temp %>% filter(complete.cases(y))
+  
+  # filter out acs vars
+  test <- d_test %>% filter_(test_cond)
+  
+  # random draw
+  if (!y %in% colnames(test)) {
+    test[y]=NA
+  }
+  A <- function(x) train[sample(nrow(train), 1), y]
+  test[y] <- apply(test[y],1, A)
+
+  return(data.frame(test[c("empid",y)]))
+}
+
+runRandDraw <- function(d_train,d_test,y,z,test_cond,lname) {
+  estimates <- mapply(RandDraw,y=y,z=z, test_cond=test_cond, MoreArgs=list(d_train,d_test), SIMPLIFY = FALSE)
+  names(estimates) <-paste(lname,names(estimates),sep= "")
+  
+  # compile estimates into a single dataframe
+  est_df <- data.frame(row.names=d_test$empid)
+  est_df$empid <- d_test$empid
+  j <- 0
+  
+  for (i in estimates) {
+    j <- j+1
+    colnames(i) <- c("empid", names(estimates)[j] )
+    est_df <- merge(est_df, i, by="empid", all.x=TRUE)
+  }
+
+  return(est_df)
+  
+}
+
 # function to impute leave length once leave taking behavior has been modified
 
 impute_leave_length <- function(d_impute, d_in, conditional, test_cond,leaveprogram) { 
@@ -144,10 +184,13 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond,leaveprog
                matdis = "length_matdis",
                bond = "length_bond")
 
-  predict <- runKNNestimate(d_in,d_impute, classes, conditional, test_cond, "length_")
+  
+  # moving to draw from leave distribution rather than KNN prediction for computational issues
+  #predict <- runKNNestimate(d_in,d_impute, classes, conditional, test_cond, "length_")
+  predict <- runRandDraw(d_impute,d_in, classes, conditional, test_cond, "length_")
   
   d_in <- merge(predict, d_in, by="empid", all.y=TRUE)
-  
+
   vars_name=c()
   for (i in leave_types) {
     vars_name= c(vars_name, paste("length",i, sep="_"))
@@ -157,9 +200,11 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond,leaveprog
   for (i in vars_name) { 
     x=paste(i,".x",sep="")
     y=paste(i,".y",sep="")
-    d_in[!is.na(d_in[x]) & !is.na(d_in[y]) & d_in[,y]==0 ,i]= 
-      d_in[!is.na(d_in[x]) & !is.na(d_in[y]) & d_in[,y]==0,x]
-    d_in[is.na(d_in[i]),i]= d_in[is.na(d_in[i]),y]
+    if (x %in% colnames(d_in) & y %in% colnames(d_in)) {
+      d_in[!is.na(d_in[x]) & !is.na(d_in[y]) & d_in[,y]==0 ,i]= 
+        d_in[!is.na(d_in[x]) & !is.na(d_in[y]) & d_in[,y]==0,x]
+      d_in[is.na(d_in[i]),i]= d_in[is.na(d_in[i]),y]  
+    }
   }
   
   # fix logical inconsistency from previous loop in cases returning predicted NA value 
@@ -175,12 +220,14 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond,leaveprog
   for (i in vars_name) { 
     x=paste(i,".x",sep="")
     y=paste(i,".y",sep="")
-    d_in <- d_in[, !(names(d_in) %in% c(x,y))]
+    if (x %in% colnames(d_in) & y %in% colnames(d_in)) {
+      d_in <- d_in[, !(names(d_in) %in% c(x,y))]
+    }
   }
   return(d_in)
 }
 
-intra_impute <- function(d_fmla,leaveprogram) {
+intra_impute <- function(d_fmla) {
   
   # ---------------------------------------------------------------------------------------------------------
   # 1. Types of Leave taken for multiple leave takers
@@ -260,43 +307,12 @@ intra_impute <- function(d_fmla,leaveprogram) {
   # Run leave type imputation on multi-leave takers based on logit estimates
   d_fmla <- runImpute(d_fmla, estimates, "need", test_conditional)
 
-  # # ---------------------------------------------------------------------------------------------------------
-  # 3. Days of Leave taken for multiple leave takers
-  # ---------------------------------------------------------------------------------------------------------
-  #Days of leave taken - KNN imputation from most recent leaves
-
-  #   Leave lengths are the same, except for own leaves, which are instead taken from the distribution of leave takers in FMLA survey reporting 
-  #   receiving some pay from state programs
+  # create placeholder variables needed later on
+  d_fmla['particip_length']=0
+  d_fmla['total_length']=0
+  d_fmla["particip"]=0
+  d_fmla["benefit_prop"]=0
   
-  
-  if (leaveprogram==TRUE) {
-    conditional <- c(own = "recStatePay == 1",
-                     illspouse = "nevermarried == 0 & divorced == 0 & recStatePay == 1",
-                     illchild = "recStatePay == 1",
-                     illparent = "recStatePay == 1",
-                     matdis = "female == 1 & nochildren == 0 & recStatePay == 1",
-                     bond = "nochildren == 0 & recStatePay == 1")
-  }
-  
-  if (leaveprogram==FALSE) {
-    conditional <- c(own = "recStatePay == 0",
-                     illspouse = "nevermarried == 0 & divorced == 0 & recStatePay == 0",
-                     illchild = "recStatePay == 0",
-                     illparent = "recStatePay == 0",
-                     matdis = "female == 1 & nochildren == 0 & recStatePay == 0",
-                     bond = "nochildren == 0 & recStatePay == 0")
-  }
-  
-  test_conditional <- c(own = "take_own==1 & num_leaves_taken>1", 
-                        illspouse = "take_illspouse==1 & num_leaves_taken>1",
-                        illchild = "take_illchild==1  & num_leaves_taken>1",
-                        illparent = "take_illparent==1  & num_leaves_taken>1",
-                        matdis = "take_matdis==1  & num_leaves_taken>1",
-                        bond = "take_bond==1  & num_leaves_taken>1")
-  
-  
-  d_fmla <- impute_leave_length(d_fmla, d_fmla, conditional, test_conditional,leaveprogram)
-
   return(d_fmla)
 }
 

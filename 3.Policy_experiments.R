@@ -21,8 +21,7 @@ options(error=NULL)
 #d_acs <- read.csv("ACS_clean.csv")
 #d_fmla <- read.csv("fmla_clean_2012.csv")
 
-source("4.NN_simulation.R")
-source("4a.intra_fmla_NN_simulation.R")
+
 #------------------------------------
 # 0. Procedural Functions 
 #------------------------------------
@@ -51,8 +50,8 @@ policy_simulation <- function(filename, leaveprogram=FALSE, uptake="full", bene_
   d_fmla_orig <- d_fmla 
   
   # intra-fmla imputation for additional leave taking and lengths
-  d_fmla <- intra_impute(d_fmla_orig,leaveprogram)
-  
+  d_fmla <- intra_impute(d_fmla_orig)
+
   # Leave program behavioral updates
   if (leaveprogram==TRUE) {
     d_fmla <-LEAVEPROGRAM(d_fmla)
@@ -70,21 +69,27 @@ policy_simulation <- function(filename, leaveprogram=FALSE, uptake="full", bene_
                         illparent = "(take_illparent==1 & length_illparent==0)|(take_illparent==0 & length_illparent!=0 & is.na(length_illparent)==FALSE)",
                         matdis = "(take_matdis==1 & length_matdis==0)|(take_matdis==0 & length_matdis!=0 & is.na(length_matdis)==FALSE)",
                         bond = "(take_bond==1 & length_bond==0)|(take_bond==0 & length_bond!=0 & is.na(length_bond)==FALSE)")
-
-  conditional <- c(own = "length_own>0 & is.na(length_own)==FALSE",
-                   illspouse = "length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
-                   illchild = "length_illchild>0 & is.na(length_illchild)==FALSE",
-                   illparent = "length_illparent>0 & is.na(length_illparent)==FALSE",
-                   matdis = "length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
-                   bond = "length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
-  
-  d_fmla <- impute_leave_length(d_fmla_orig, d_fmla, conditional, test_conditional,leaveprogram)
-
+  if (leaveprogram==TRUE) {
+    conditional <- c(own = "recStatePay == 1 &length_own>0 & is.na(length_own)==FALSE",
+                     illspouse = "recStatePay == 1 &length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
+                     illchild = "recStatePay == 1 &length_illchild>0 & is.na(length_illchild)==FALSE",
+                     illparent = "recStatePay == 1 &length_illparent>0 & is.na(length_illparent)==FALSE",
+                     matdis = "recStatePay == 1 &length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
+                     bond = "recStatePay == 1 &length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
+  }
+  if (leaveprogram==FALSE) {
+    conditional <- c(own = "recStatePay == 0 & length_own>0 & is.na(length_own)==FALSE",
+                     illspouse = "recStatePay == 0 & length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
+                     illchild = "recStatePay == 0 & length_illchild>0 & is.na(length_illchild)==FALSE",
+                     illparent = "recStatePay == 0 & length_illparent>0 & is.na(length_illparent)==FALSE",
+                     matdis = "recStatePay == 0 & length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
+                     bond = "recStatePay == 0 & length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
+  } 
+  d_fmla <- impute_leave_length(d_fmla_orig, d_fmla, conditional, test_conditional)
 
   #-------------FMLA imputation------------------------------
   # currently just simple nearest neighbor, K=1 
   filename <- fmla_impute(filename,d_fmla,d_acs,leaveprogram)
- 
   
   # -------------Post-imputation functions-----------------
   
@@ -167,8 +172,7 @@ UPTAKE <- function(d, own_uptake, matdis_uptake, bond_uptake, illparent_uptake,
   d["particip"] <- ifelse(d[,"eligworker"]==1 & d[,"prop_pay"]<d[,"benefit_prop"],1,d[,"particip"])
 
   # calculate uptake -> days of leave that program benefits are collected
-  d['particip_length']=0
-  d['total_length']=0
+
   for (i in leave_types) {
     uptake_val=paste(i,"_uptake",sep="")
     rand=runif(1)
@@ -198,28 +202,7 @@ UPTAKE <- function(d, own_uptake, matdis_uptake, bond_uptake, illparent_uptake,
 # 2. Post-imputation Leave Parameter Functions [on post-imputation ACS data set]
 #------------------------------------
 
-# -----------LEAVEPROBABILITYFACTORS-----------------------------------------------------------------------------------------------------------------
-# allow for users to adjust leave taking probability by type
-# CANNOT IMPLEMENT THIS PARAMETER WHEN NOT USING LOGIT
-# PROBABILITIES OF TAKING LEAVE ARE NOT ESTIMATED WITH ALL METHODS
 
-
-# LEAVEPROBABILITYFACTORS <- function(d, illchild_prob,own_prob, matdis_prob, bond_prob, illparent_prob, 
-#                                     illspouse_prob) {
-#   for (i in leave_types) {
-#     prob_val=paste(i,"_prob",sep="")
-#     take_var=paste("take_",i,sep="")
-#     d['rand']=runif(nrow(d))
-#     d['prob_val']=prob_val
-#     if (prob_val<1) {
-#       d <- d %>% mutate(take_var=ifelse(rand>prob_val,0,take_var))
-#     }
-#     if (prob_val>1) {
-#       d <- d %>% mutate(take_var=ifelse(rand<1/prob_val,1,take_var))
-#     }
-#   }
-#   d <- d[, !(names(d) %in% c('rand'))]
-# }
 # -------------------acs_leave_vars------------------
 # Adding new variables with imputed variables
 
@@ -251,9 +234,6 @@ update_benefits <- function(d, classes) {
 BENEFITEFFECT <- function(d) {
   d_prob <- read.csv("bene_effect_prob.csv")
   
-  #PLACEHOLDER FINCP, DELETE LATER AFTER GETTING INTO ACS
-  d['FINCP']=d['WAGP']
-  
   # define benefit difference to match 2001 Westat survey categories
   d <- d %>% mutate(bene_diff=(actual_benefits-actual_leave_pay)/particip_length*5)
   d <- d %>% mutate(bene_diff=ifelse(bene_diff<=25, 0, bene_diff))
@@ -264,12 +244,12 @@ BENEFITEFFECT <- function(d) {
   d['bene_diff']=as.integer(d[,'bene_diff'])
   
   # define family income to match 2001 Westat survey categories
-  d <- d %>% mutate(finc_cat=ifelse(FINCP<=10000,10000,NA))
+  d <- d %>% mutate(finc_cat=ifelse(faminc<=10000,10000,NA))
   inc_cut <- seq(20000, 90000, by=10000)
   for (i in inc_cut) {
-    d <- d %>% mutate(finc_cat=ifelse(FINCP>i & FINCP<=i+10000,i,finc_cat))
+    d <- d %>% mutate(finc_cat=ifelse(faminc>i & faminc<=i+10000,i,finc_cat))
   }
-  d <- d %>% mutate(finc_cat=ifelse(FINCP>100000,100000,finc_cat))
+  d <- d %>% mutate(finc_cat=ifelse(faminc>100000,100000,finc_cat))
   d['finc_cat']=as.numeric(d[,'finc_cat'])
   
   # recalculate uptake based on bene_diff

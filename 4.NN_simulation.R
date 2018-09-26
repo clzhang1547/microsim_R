@@ -16,66 +16,12 @@ library("dplyr")
 library("survey")
 library("varhandle")
 
-#options(error=recover)
-options(error=NULL)
+options(error=recover)
+#options(error=NULL)
 
 # ---------------------------------------------------------------------------------------------------------
 # 0. Define Functions
 # ---------------------------------------------------------------------------------------------------------
-
-runKNN <- function(d_train,d_test,y,z,test_cond) {
-  
-  xvars <- c("widowed", "divorced", "separated", "nevermarried", "female", 
-             "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
-             "white", "asian", "hisp","nochildren")
-  
-  # filter fmla cases
-  d_temp <- d_train %>% filter_(z)
-  d_temp <- d_temp[c(y, xvars)]
-  d_temp <- d_temp %>% filter(complete.cases(.))
-  
-  # create labels, training data
-  label <- d_temp[c(y)]
-  train <- d_temp[c(xvars)]
-  
-  # filter out acs vars
-  temp_test <- d_test %>% filter_(test_cond)
-  temp_test <- temp_test %>% filter(complete.cases(temp_test[c(xvars)]))
-  
-  # create test data set 
-  test <- temp_test[c(xvars)]
-  
-  
-  
-  # estimate KNN
-  estimate <-knn(train, test, as.factor(label[,y]), k=1, use.all=FALSE)
-  
-  # NOT YET ADDRESSED
-  # in case of ties, knn() function randomly assigns neighbor among tied candidates
-  # fixing random seed to preserve replicability 
-  
-  
-  return(data.frame(temp_test["empid"],unfactor(estimate)))
-}
-
-runKNNestimate <- function(d_train,d_test,y,z,test_cond,lname) {
-  # get KNN estimates for all leave types
-  estimates <- mapply(runKNN,y=y,z=z, test_cond=test_cond, MoreArgs=list(d_train,d_test), SIMPLIFY = FALSE)
-  names(estimates) <-paste(lname,names(estimates),sep= "")
-  
-  # compile estimates into a single dataframe
-  est_df <- data.frame(row.names=d_test$empid)
-  est_df$empid <- d_test$empid
-  j <- 0
-  
-  for (i in estimates) {
-    j <- j+1
-    colnames(i) <- c("empid", names(estimates)[j] )
-    est_df <- merge(est_df, i, by="empid", all.x=TRUE)
-  }
-  return(est_df)
-  
-}
 
 #  function to loop through leaves types
 fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
@@ -98,7 +44,7 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
                    bond = "nochildren == 0")
   
   
-  predict <- runKNNestimate(d_fmla,d_acs,classes, conditional, conditional, "take_")
+  predict <- runKNNestimate(d_fmla,d_acs,"empid", classes, conditional, conditional, "take_")
   d_acs <- merge(d_acs,predict, by="empid")
   
   
@@ -117,22 +63,21 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
   #   receiving some pay from state programs
   
   if (leaveprogram==TRUE) {
-    conditional <- c(own = "recStatePay == 1",
-                     illspouse = "nevermarried == 0 & divorced == 0 & recStatePay == 1",
-                     illchild = "recStatePay == 1",
-                     illparent = "recStatePay == 1",
-                     matdis = "female == 1 & nochildren == 0 & recStatePay == 1",
-                     bond = "nochildren == 0 & recStatePay == 1")
+    conditional <- c(own = "recStatePay == 1 &length_own>0 & is.na(length_own)==FALSE",
+                     illspouse = "recStatePay == 1 &length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
+                     illchild = "recStatePay == 1 &length_illchild>0 & is.na(length_illchild)==FALSE",
+                     illparent = "recStatePay == 1 &length_illparent>0 & is.na(length_illparent)==FALSE",
+                     matdis = "recStatePay == 1 &length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
+                     bond = "recStatePay == 1 &length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
   }
-  
   if (leaveprogram==FALSE) {
-    conditional <- c(own = "recStatePay == 0",
-                     illspouse = "nevermarried == 0 & divorced == 0 & recStatePay == 0",
-                     illchild = "recStatePay == 0",
-                     illparent = "recStatePay == 0",
-                     matdis = "female == 1 & nochildren == 0 & recStatePay == 0",
-                     bond = "nochildren == 0 & recStatePay == 0")
-  }
+    conditional <- c(own = "recStatePay == 0 & length_own>0 & is.na(length_own)==FALSE",
+                     illspouse = "recStatePay == 0 & length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
+                     illchild = "recStatePay == 0 & length_illchild>0 & is.na(length_illchild)==FALSE",
+                     illparent = "recStatePay == 0 & length_illparent>0 & is.na(length_illparent)==FALSE",
+                     matdis = "recStatePay == 0 & length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
+                     bond = "recStatePay == 0 & length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
+  } 
   
   test_conditional <- c(own = "take_own==1",
                         illspouse = "take_illspouse==1 & nevermarried == 0 & divorced == 0",
@@ -141,10 +86,8 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
                         matdis = "take_matdis==1 & female == 1 & nochildren == 0",
                         bond = "take_bond==1 & nochildren == 0")
   
-  predict <- runKNNestimate(d_fmla,d_acs,classes, conditional, test_conditional, "length_")
-  
-  d_acs <- merge(d_acs,predict, by="empid")
-  
+  d_acs <- impute_leave_length(d_fmla, d_acs, conditional, test_conditional)
+
   # ---------------------------------------------------------------------------------------------------------
   # 3. Other Leave characteristics needed
   # ---------------------------------------------------------------------------------------------------------
@@ -152,13 +95,11 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
   
   conditional <- rep("TRUE",length(classes))
   
-  predict<- runKNNestimate(d_fmla,d_acs,classes, conditional, conditional, "")
+  predict<- runKNNestimate(d_fmla,d_acs,"empid",classes, conditional, conditional, "")
   
   d_acs <- merge(d_acs,predict, by="empid")
 
   write.csv(d_acs, file = paste(filename,".csv",sep=""), row.names = FALSE)
   return(d_acs)
 }
-
-
 
