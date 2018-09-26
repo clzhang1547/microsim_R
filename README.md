@@ -37,4 +37,5 @@ fmla_clean_2012.csv: cleaned FMLA file from "1. clean_FMLA.R"
 
 ## outputs
 "ACS_with_program.csv": ACS file with imputed leave, based on presence of program and sample parameters. Identical to "d1" in "5. execution.R"
+
 "ACS_no_program.csv": ACS file with imputed leave, based on absence of program. Identical to "d2" in "5. execution.R"
