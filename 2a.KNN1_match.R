@@ -28,7 +28,7 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
              "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
              "white", "asian", "hisp","nochildren")
   
-  # filter fmla m_test
+  # filter fmla cases
   
   d_temp <- d_train %>% filter_(train_cond)
   d_temp <- d_temp[c(imp_var, xvars)]
@@ -82,56 +82,17 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
   temp$min_dist <- ncol(train)
   temp$nbor <- NA
   
-  m_test <- as.matrix(test)
-  m_train <-as.matrix(train)
+  cases <- as.matrix(test)
+  candidates <-as.matrix(train)
+  
   
   find_dist <- function(x,y) {
     return((sum((x - y) ^ 2))^(0.5))
   } 
-  
-  cols <-ncol(m_test)
-  nest_test <- list()
-  nest_train <- list()
-  # nested lists of vectors for apply functions
-  
-  nest_test <- lapply(seq(1,nrow(m_test)) , function(y){ 
-    m_test[y,2:cols]
-  })
-  nest_train <- lapply(seq(1,nrow(m_train)) , function(y){ 
-    m_train[y,2:cols]
-  })
-  
-  # for (i in seq(1,nrow(m_train))) {
-  #   nest_train[i] <- list(m_train[i,2:cols])
-  # }
-  
-  
   # mark neighbor as minimium distance
-  
-  min_start <- ncol(train)
-  
-  f1 <- function(j) {
-    min_dist <- min_start
-    nbor <- NA
-    count <- 0
-    mapply(f2, i=nest_train,moreArgs=list(j,min_dist,nbor))
-  }
-
-  f2 <- function(i,k,min_dist,nbor) {
-    dist <- find_dist(i,j)
-    count <- count + 1
-    if (min_dist > dist) {
-      min_dist <- dist
-      nbor <- count
-    }
-    list(dist, nbor)
-  }
-  
-  z <- lapply(nest_test, f1)
-  pause()
-  for (j in seq(1,nrow(m_test))) {
-      for (i in seq(1,nrow(m_train))) {
-        dist <- find_dist(m_test[j,2:cols], m_train[i,2:cols] )
+  for (j in seq(1,nrow(cases))) {
+      for (i in seq(1,nrow(candidates))) {
+        dist <- find_dist(cases[j,2:ncol(cases)], candidates[i,2:ncol(cases)] )
         if (temp[j,"min_dist"]> dist ) {
            temp[j,"min_dist"] <- dist
            temp[j,"nbor"] <- d_temp[i,'empid']
@@ -162,14 +123,3 @@ runKNNestimate <- function(d_train,d_test,id_var,imp_var,train_cond,test_cond,ln
   
 }
 
-d_fmla <- read.csv("fmla_clean_2012.csv")
-d_acs <- read.csv("ACS_clean.csv")
-
-classes <- c(own = "take_own")
-
-conditional <- c(own = "TRUE")
-
-start_time <-Sys.time()
-predict <- runKNNestimate(d_fmla,d_acs,"empid", classes, conditional, conditional, "take_")
-end_time <- Sys.time()
-print(end_time - start_time)
