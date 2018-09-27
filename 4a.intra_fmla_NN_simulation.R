@@ -1,4 +1,5 @@
 
+
 # """
 # Program to create a basic k=1 Nearest Neighbor imputation 
 # Leave lengths for multiple reasons need to be imputed for multi-leave takers
@@ -307,12 +308,5 @@ intra_impute <- function(d_fmla) {
   # Run leave type imputation on multi-leave takers based on logit estimates
   d_fmla <- runImpute(d_fmla, estimates, "need", test_conditional)
 
-  # create placeholder variables needed later on
-  d_fmla['particip_length']=0
-  d_fmla['total_length']=0
-  d_fmla["particip"]=0
-  d_fmla["benefit_prop"]=0
-  
   return(d_fmla)
 }
-

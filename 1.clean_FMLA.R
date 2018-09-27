@@ -208,7 +208,7 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(fixed_weight = unlist(fixed_weight
 
 # --------------------------
 # dummies for leave type 
-# --------------------------
+# -------------------------- 
 
 # there are four variables for each leave type:
 # (1) taking a leave
@@ -296,7 +296,6 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(type_illparent = ifelse((take_illp
 fmla_2012_clean <- fmla_2012_clean %>% mutate(type_illparent = ifelse((is.na(take_illparent) == 1 | is.na(need_illparent) == 1),NA,type_illparent))
 
 fmla_2012_clean <- fmla_2012_clean %>% mutate(length_illparent = ifelse(take_illparent==1,length, 0))
-
 
 
 # saving data

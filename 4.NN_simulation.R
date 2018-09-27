@@ -1,4 +1,5 @@
 
+
 # """
 # Program to create a basic k=1 Nearest Neighbor imputation of leave-taking behavior in ACS data from FMLA observations
 #  
@@ -91,7 +92,7 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
   # ---------------------------------------------------------------------------------------------------------
   # 3. Other Leave characteristics needed
   # ---------------------------------------------------------------------------------------------------------
-  classes <- c("prop_pay","particip","particip_length","total_length","benefit_prop","coveligd")
+  classes <- c("prop_pay","unaffordable")
   
   conditional <- rep("TRUE",length(classes))
   
@@ -102,4 +103,6 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
   write.csv(d_acs, file = paste(filename,".csv",sep=""), row.names = FALSE)
   return(d_acs)
 }
+
+
 

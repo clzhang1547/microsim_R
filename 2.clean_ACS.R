@@ -37,7 +37,7 @@ d_hh$nochildren <- as.data.frame(dummy("FPARC",d_hh))$FPARC4
 d_hh$faminc <- d_hh$FINCP
 d_hh$lnfaminc <- log(d_hh$FINCP)
 
-
+ 
 # -------------------------- #
 # ACS Person File
 # -------------------------- #
@@ -47,8 +47,6 @@ d <- read.csv("ss15pma_short.csv")
 #d <- read.csv("ss16pca.csv")
 #d <- read.csv("ss15pma.csv")
 
-# sample for runtime issues
-d <- n_sample(d, 10000)
 
 # merge with household level vars 
 d <- merge(d,d_hh[c("SERIALNO","nochildren","lnfaminc","faminc")], by="SERIALNO")
@@ -135,4 +133,3 @@ d <- subset(d, COW!=6 & COW!=7)
 d$empid = rownames(d)
 
 write.csv(d, file = "ACS_clean.csv", row.names = FALSE)
-#write.csv(d, file = "Mass_ACS_clean.csv", row.names = FALSE)

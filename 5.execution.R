@@ -23,14 +23,14 @@ source("4.NN_simulation.R")
 source("4a.intra_fmla_NN_simulation.R")
 
 
-options(max.print=2000)
+#options(max.print=2000)
 
 #options(error=NULL)
-
+#options(error=recover)
 
 # baseline data
 #full_acs_csv <- read.csv("Mass_ACS_clean.csv")
-fmla_csv <- read.csv("fmla_clean_2012.csv")
+fmla_csv <- read.csv("fmla_clean_2012.csv") 
 acs_csv <- read.csv("ACS_clean.csv")
 
 
@@ -38,9 +38,11 @@ acs_csv <- read.csv("ACS_clean.csv")
 # Prescence of leave program scenario - testing out all the parameters
 #-----------------------------------------------------------------------------
 start_time <- Sys.time()
-d1 <- policy_simulation(filename="ACS_with_program", leaveprogram=TRUE,bene_level=.50,
+
+d1 <- policy_simulation(filename="ACS_with_program", leaveprogram=TRUE,bene_level=.75,
                                       topoff_rate = .25, topoff_minlength = 5,
-                                      d_fmla=fmla_csv, d_acs=acs_csv, bene_effect=1)
+                                      d_fmla=fmla_csv, d_acs=acs_csv, bene_effect=1,
+                                      full_particip_needer=1)
 end_time <- Sys.time()
 print(end_time - start_time)
 
@@ -63,6 +65,7 @@ print(end_time - start_time)
 #               "percent increase in",i, "leave"))
 # }
 # 
+
 
 
 

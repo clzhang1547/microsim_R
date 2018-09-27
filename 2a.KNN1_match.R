@@ -28,14 +28,14 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
              "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
              "white", "asian", "hisp","nochildren")
   
-  # filter fmla cases
+  # filter fmla m_test
   
-  d_temp <- d_train %>% filter_(train_cond)
-  d_temp <- d_temp[c(imp_var, xvars)]
-  d_temp <- d_temp %>% filter(complete.cases(.))
+  temp_train <- d_train %>% filter_(train_cond)
+  temp_train <- temp_train[c(imp_var, xvars)]
+  temp_train <- temp_train %>% filter(complete.cases(.))
   
   # create labels, training data
-  train <- d_temp[c(xvars)]
+  train <- temp_train[c(xvars)]
   
   # filter out acs vars
   temp_test <- d_test %>% filter_(test_cond)
@@ -78,37 +78,50 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
   # id var must be first variable of data
   
   # find distance
-  temp <- test
-  temp$min_dist <- ncol(train)
-  temp$nbor <- NA
+
+  m_test <- as.matrix(test)
+  m_train <-as.matrix(train)
   
-  cases <- as.matrix(test)
-  candidates <-as.matrix(train)
+  cols <-ncol(m_test)
+  nest_test <- list()
+  nest_train <- list()
+  # nested lists of vectors for apply functions
   
+  nest_test <- lapply(seq(1,nrow(m_test)) , function(y){ 
+    m_test[y,2:cols]
+  })
+  nest_train <- lapply(seq(1,nrow(m_train)) , function(y){ 
+    m_train[y,2:cols]
+  })
+  
+  # mark neighbor as minimium distance
+  start_time <-Sys.time()
+  
+  min_start <- ncol(train)
+  
+  f1 <- function(j) {
+    min_dist <- min_start
+    nbor <- NA
+    d <- mapply(find_dist, x=nest_train, MoreArgs=list(y=j))
+    return(which.min(d))
+  }
   
   find_dist <- function(x,y) {
     return((sum((x - y) ^ 2))^(0.5))
   } 
-  # mark neighbor as minimium distance
-  for (j in seq(1,nrow(cases))) {
-      for (i in seq(1,nrow(candidates))) {
-        dist <- find_dist(cases[j,2:ncol(cases)], candidates[i,2:ncol(cases)] )
-        if (temp[j,"min_dist"]> dist ) {
-           temp[j,"min_dist"] <- dist
-           temp[j,"nbor"] <- d_temp[i,'empid']
-        }
-      }
-  }
-  # impute neighbor's variable of interest
-  d_train$nbor <- d_train$empid
-  temp <- join(temp[c("empid","nbor")], d_train[c("nbor",imp_var)], by=c("nbor"), type="left")
+  
+  temp <- lapply(nest_test, f1)
+  temp <- unlist(temp)
+  temp <- cbind(temp_test["empid"],as.data.frame(unlist(temp)))
+  colnames(temp)[colnames(temp)=="unlist(temp)"] <- "nbor"
+  temp_train$nbor <- rownames(temp_train)
+  temp <- join(temp[c("empid","nbor")], temp_train[c("nbor",imp_var)], by=c("nbor"), type="left")
   return(temp[c("empid",imp_var)])
 }
 
 runKNNestimate <- function(d_train,d_test,id_var,imp_var,train_cond,test_cond,lname) {
   # get KNN estimates for all leave types
   estimates <- mapply(KNN1_scratch, imp_var=imp_var,train_cond=train_cond, test_cond=test_cond, MoreArgs=list(d_train,d_test,id_var), SIMPLIFY = FALSE)
-
   # compile estimates into a single dataframe
   est_df <- data.frame(row.names=d_test$empid)
   est_df$empid <- d_test$empid
@@ -122,4 +135,3 @@ runKNNestimate <- function(d_train,d_test,id_var,imp_var,train_cond,test_cond,ln
   return(est_df)
   
 }
-

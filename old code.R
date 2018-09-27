@@ -113,4 +113,3 @@ runKNNestimate <- function(d_train,d_test,y,z,test_cond,lname) {
 #     }
 #   }
 #   d <- d[, !(names(d) %in% c('rand'))]
-# }
