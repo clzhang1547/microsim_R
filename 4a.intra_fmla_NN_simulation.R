@@ -137,14 +137,13 @@ runImpute <- function(d_in, estimates, lname,tcond) {
 # functions to randomly draw from distribution of variable in data set
 
 RandDraw <- function(d_train,d_test,y,z,test_cond) {
-
+  
   # filter fmla cases
   d_temp <- d_train %>% filter_(z)
   train <- d_temp %>% filter(complete.cases(y))
   
   # filter out acs vars
   test <- d_test %>% filter_(test_cond)
-  
   # random draw
   if (!y %in% colnames(test)) {
     test[y]=NA
@@ -154,6 +153,7 @@ RandDraw <- function(d_train,d_test,y,z,test_cond) {
 
   return(data.frame(test[c("empid",y)]))
 }
+
 
 runRandDraw <- function(d_train,d_test,y,z,test_cond,lname) {
   estimates <- mapply(RandDraw,y=y,z=z, test_cond=test_cond, MoreArgs=list(d_train,d_test), SIMPLIFY = FALSE)

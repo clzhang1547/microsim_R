@@ -39,13 +39,24 @@ acs_csv <- read.csv("ACS_clean.csv")
 #-----------------------------------------------------------------------------
 start_time <- Sys.time()
 
-d1 <- policy_simulation(filename="ACS_with_program", leaveprogram=TRUE,bene_level=.75,
-                                      topoff_rate = .25, topoff_minlength = 5,
+d1 <- policy_simulation(filename="ACS_with_program", leaveprogram=TRUE,bene_level=.55,
+                                      topoff_rate = .2, topoff_minlength = 5,
                                       d_fmla=fmla_csv, d_acs=acs_csv, bene_effect=1,
-                                      full_particip_needer=1)
+                                      full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0,
+                                      extend_prob=.3, extend_days=5, extend_prop=1.1, week_bene_cap=1216,
+                                      own_uptake=.8, matdis_uptake=.9, bond_uptake=.85, illparent_uptake=.6,
+                                      illspouse_uptake=.6, illchild_uptake=.7,
+                                      maxlen_own =260, maxlen_matdis =260, maxlen_bond =30, maxlen_illparent =30, 
+                                      maxlen_illspouse =30, maxlen_illchild =30)
 end_time <- Sys.time()
 print(end_time - start_time)
 
+# diagnostic tables
+table(d1$particip)
+table(d1$particip_length)
+table(d1$total_length)
+table(d1$actual_benefits)
+table(d1$actual_leave_pay)
 # #------------------------------------
 # # Abscence of leave program scenario
 # #------------------------------------

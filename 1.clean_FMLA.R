@@ -144,8 +144,9 @@ fmla_2012_clean <- fmla_2012_clean %>% mutate(hospital1 = ifelse(is.na(LEAVE_CAT
 fmla_2012_clean <- fmla_2012_clean %>% mutate(hospital2 = ifelse(is.na(LEAVE_CAT) == FALSE & (LEAVE_CAT == 2 | LEAVE_CAT == 4), hospital_need, hospital_take))  
 
 # length of leave for most recent leave
-fmla_2012_clean <- fmla_2012_clean %>% mutate(length = ifelse(is.na(A20) == FALSE & A20 == 2, A19_2_CAT_rev, A19_1_CAT_rev),
-                                              lengthsq = length^2,
+fmla_2012_clean <- fmla_2012_clean %>% mutate(length = ifelse(is.na(A20) == FALSE & A20 == 2, A19_2_CAT_rev, A19_1_CAT_rev))
+
+fmla_2012_clean <- fmla_2012_clean %>% mutate(lengthsq = length^2,
                                               lnlength = log(length),
                                               lnlengthsq = lnlength^2)
 

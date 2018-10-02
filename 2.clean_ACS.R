@@ -8,10 +8,6 @@
 # 9 Sept 2018
 # Luke
 # 
-# To do:
-# - The biggest missing piece is the imputation of ACS variables using the CPS. These are currently just randomly generated.
-# - Check if the ACS variables are the same as those in the C++ code
-# 
 # """
 rm(list=ls())
 cat("\014")  
@@ -114,10 +110,23 @@ d <- d %>% mutate(  ind_1 = ifelse(INDP>=170 & INDP<=290 ,1,0),
                     ind_13 = ifelse(INDP>=9370 & INDP<=9590 ,1,0))
 
 
+# Weeks worked
+# simply taking midpoint of range for now
+# Haven't had success implementing an ordinal regression in R that's consistent with ACM 
+
+d <- d %>% mutate(weeks_worked=ifelse(WKW==1,51,0))
+d <- d %>% mutate(weeks_worked=ifelse(WKW==2,48.5,weeks_worked))
+d <- d %>% mutate(weeks_worked=ifelse(WKW==3,43.5,weeks_worked))
+d <- d %>% mutate(weeks_worked=ifelse(WKW==4,33,weeks_worked))
+d <- d %>% mutate(weeks_worked=ifelse(WKW==5,20,weeks_worked))
+d <- d %>% mutate(weeks_worked=ifelse(WKW==6,7.5,weeks_worked))
+d <- d %>% mutate(weeks_worked=ifelse(is.na(weeks_worked),0,weeks_worked))
+
 
 # -------------------------- #
 # Remove ineligible workers
 # -------------------------- #
+# This is better done by GUI filtering data I think
 
 # Restrict dataset to civilian employed workers (check this)
 d <- subset(d, ESR==1|ESR==2)
