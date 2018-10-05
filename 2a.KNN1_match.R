@@ -7,18 +7,6 @@
 #
 # """
 
-cat("\014")  
-this.dir <- dirname(parent.frame(2)$ofile)
-setwd(this.dir)
-
-library("class")
-library("dplyr")
-library("survey")
-library("varhandle")
-
-options(error=recover)
-#options(error=NULL)
-
 # build a NN K=1 function from scratch
 KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond) { 
   

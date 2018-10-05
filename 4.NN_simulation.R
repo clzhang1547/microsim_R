@@ -8,18 +8,6 @@
 #
 # """
 
-cat("\014")  
-this.dir <- dirname(parent.frame(2)$ofile)
-setwd(this.dir)
-
-library("class")
-library("dplyr")
-library("survey")
-library("varhandle")
-
-options(error=recover)
-#options(error=NULL)
-
 # ---------------------------------------------------------------------------------------------------------
 # 0. Define Functions
 # ---------------------------------------------------------------------------------------------------------

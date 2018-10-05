@@ -21,22 +21,6 @@
 #
 # """
 
-cat("\014")  
-#rm(list=ls())
-this.dir <- dirname(parent.frame(2)$ofile)
-setwd(this.dir)
-
-library("plyr")
-library("dplyr")
-library("survey")
-library("varhandle")
-
-options(error=recover)
-#options(error=NULL)
-source("4.NN_simulation.R")
-
-# d_test - entire FMLA survey
-# d_train - FMLA survey respondents with multiple leaves taken/needed
 
 # ---------------------------------------------------------------------------------------------------------
 # 0. Define Functions
@@ -231,6 +215,29 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond,leaveprog
 intra_impute <- function(d_fmla) {
   
   # ---------------------------------------------------------------------------------------------------------
+  # 0. For those multi-leave takers who responded to longest leave for a different reason, use that reason/length 
+  #    rather than imputing
+  # ---------------------------------------------------------------------------------------------------------
+  # count number of leaves needed
+  vars_name=c()
+  for (i in leave_types) {
+    vars_name= c(vars_name, paste("take_",i, sep=""))
+  }
+  d_fmla['leave_count']=d_fmla['num_leaves_taken']- rowSums(d_fmla[,vars_name], na.rm=TRUE)
+  d_fmla['long_flag']=0
+  for (i in leave_types) {
+    take_var=paste("take_",i,sep="")
+    len_var=paste("length_",i,sep="")
+    long_var=paste("long_",i,sep="")
+    longlen_var=paste("longlength_",i,sep="")
+    
+    d_fmla['long_flag'] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,1,long_flag))  
+    d_fmla[take_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,1,get(take_var)))
+    d_fmla[len_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,get(longlen_var),get(len_var)))  
+    
+  }
+  
+  # ---------------------------------------------------------------------------------------------------------
   # 1. Types of Leave taken for multiple leave takers
   # ---------------------------------------------------------------------------------------------------------
 
@@ -253,7 +260,7 @@ intra_impute <- function(d_fmla) {
                    matdis = "female == 1 & nochildren == 0",
                    bond = "nochildren == 0")
   
-  test_conditional <- rep("num_leaves_taken>1",6)
+  test_conditional <- rep("num_leaves_taken>1 & long_flag==0",6)
   
   # weights
   weight <- c(own = "~ fixed_weight",
@@ -292,7 +299,7 @@ intra_impute <- function(d_fmla) {
                    matdis = "female == 1 & nochildren == 0",
                    bond = "nochildren == 0")
   
-  test_conditional <- rep("num_leaves_need>1",6)
+  test_conditional <- rep("num_leaves_need>1 & long_flag==0",6)
   
   # weights
   weight <- c(own = "~ fixed_weight",
