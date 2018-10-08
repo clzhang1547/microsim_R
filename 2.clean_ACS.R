@@ -31,10 +31,8 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
   # -------------------------- #
   
   # load file
-  # This should be deleted right?
-  d <- read.csv("ss15pma_short.csv")
-  #d <- read.csv("ss16pca.csv")
-  #d <- read.csv("ss15pma.csv")
+  # H: This should be deleted right?
+ 	# L: yep, it was commented out in a later version I forgot to commit
   
   
   # merge with household level vars 
