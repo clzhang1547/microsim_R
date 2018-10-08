@@ -236,6 +236,7 @@ intra_impute <- function(d_fmla) {
     
     # Let's talk about the use of "with" here. I prefer using dplyr, but I'm not sure how it copes with strings.
     # Also the logic of what's going on.
+      # L: Sure, let's talk. I was having trouble with mutate() and iterative strings so this was my solution.
     d_fmla['long_flag'] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,1,long_flag))  
     d_fmla[take_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,1,get(take_var)))
     d_fmla[len_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,get(longlen_var),get(len_var)))  

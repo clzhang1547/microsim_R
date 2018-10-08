@@ -24,7 +24,8 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
                illparent = "take_illparent",
                matdis = "take_matdis",
                bond = "take_bond")
-  # I forget the logic for these conditionals. We should discuss.
+  # H: I forget the logic for these conditionals. We should discuss.
+      # L: Sure
   conditional <- c(own = "TRUE",
                    illspouse = "nevermarried == 0 & divorced == 0",
                    illchild = "TRUE",
@@ -32,10 +33,12 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
                    matdis = "female == 1 & nochildren == 0",
                    bond = "nochildren == 0")
   
-  # Produces a 7 column dataframe of empid and indicator of whether each type of leave was taken
+  # H: Produces a 7 column dataframe of empid and indicator of whether each type of leave was taken
+
   predict <- runKNNestimate(d_fmla,d_acs,"empid", classes, conditional, conditional, "take_")
   
-  # Merge these with the acs. Use left_join here.
+  # H: Merge these with the acs. Use left_join here.
+      # L: I'm sure there's a good reason, would be interested to know why.
   d_acs <- merge(d_acs,predict, by="empid")
   
   
@@ -52,8 +55,11 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
   
   #   Leave lengths are the same, except for own leaves, which are instead taken from the distribution of leave takers in FMLA survey reporting 
   #   receiving some pay from state programs
-  # Why are these imputed separately? Couldn't this be done in the above? In other words, why doesn't the above also
-  # grab the length from the nearest neighbor instead of just the take/don't take indicator?
+  # H:  Why are these imputed separately? Couldn't this be done in the above? In other words, why doesn't the above also
+  #     grab the length from the nearest neighbor instead of just the take/don't take indicator?
+      # L: Would save us a KNN call. Only issue might be there are take_==1 in FMLA with missing lengths
+      #    So they are drawing from different conditionals (and this is a random draw as opposed to a KNN to match ACM's model).
+      #    This is one more place where KNN could be called.
   
   if (leaveprogram==TRUE) {
     conditional <- c(own = "recStatePay == 1 &length_own>0 & is.na(length_own)==FALSE",

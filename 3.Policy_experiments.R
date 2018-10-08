@@ -97,17 +97,21 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
 
   # intra-fmla imputation for additional leave taking and lengths
   # see 4a. file for below function
-  # This creates 4 columns for each leave type stating whether or not they take the leave and how long. Correct?
+  # H: This creates 4 columns for each leave type stating whether or not they take the leave and how long. Correct?
+    # L: These 4 columns for each leave type are already there, it's just modifying len_ and take_ vars for those with additional leaves
+    #    Long_len, and long_ vars are not modified.
   d_fmla <- intra_impute(d_fmla_orig)
 
   # In presence of program, apply leave-taking behavioral updates
-  # This adjusts the take_leave columns to include 1s for those that would have taken leave
+  # H: This adjusts the take_leave columns to include 1s for those that would have taken leave
+      #L: Correct
   if (leaveprogram==TRUE) {
     d_fmla <-LEAVEPROGRAM(d_fmla)
   }
   
   # after all parameters have been accounted for, add/remove leave lengths for leaves taken/removed
-  # let's talk about the logic for these conditionals
+  # H: let's talk about the logic for these conditionals
+      # L: Haha, yeah they are quite messy
   test_conditional <- c(own = "(take_own==1 & length_own==0)|(take_own==0 & length_own!=0 & is.na(length_own)==FALSE)", 
                         illspouse = "(take_illspouse==1 & length_illspouse==0)|(take_illspouse==0 & length_illspouse!=0 & is.na(length_illspouse)==FALSE)",
                         illchild = "(take_illchild==1 & length_illchild==0)|(take_illchild==0 & length_illchild!=0 & is.na(length_illchild)==FALSE)",
@@ -122,7 +126,8 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
                      matdis = "recStatePay == 1 &length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
                      bond = "recStatePay == 1 &length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
   }
-  # No big deal but could make this an else statement
+  # H: No big deal but could make this an else statement
+      # L: Gotcha. Was thinking it's more explicit to do if. NBD either way
   if (leaveprogram==FALSE) {
     conditional <- c(own = "recStatePay == 0 & length_own>0 & is.na(length_own)==FALSE",
                      illspouse = "recStatePay == 0 & length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
@@ -133,7 +138,9 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
   } 
 
   # see 4a. file for below function
-  # What does this return? The FMLA dataset with leave length for the other leave types we don't have info for?
+  # H: What does this return? The FMLA dataset with leave length for the other leave types we don't have info for?
+    # L: Yeah. We added modified the take_ vars in intra_impute() and LEAVEPROGRAM(), but they don't have lengths. this imputes lengths for those leaves
+
   d_fmla <- impute_leave_length(d_fmla_orig, d_fmla, conditional, test_conditional)
 
 
