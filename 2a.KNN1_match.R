@@ -8,21 +8,28 @@
 # """
 
 # build a NN K=1 function from scratch
+# Let's run this on a super simple dataset to see if it gets the same results as a canned package.
 KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond) { 
+  
+  # This returns a dataframe of length equal to acs with the employee id and a column for each leave type
+  # that indicates whether or not they took the leave.
   
   # Data manipulation
   
+  # Maybe we should take these outside the function
   xvars <- c("empid", "widowed", "divorced", "separated", "nevermarried", "female", 
              "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
              "white", "asian", "hisp","nochildren")
   
   # filter fmla m_test
-  
+  # filter on conditions, select just the variables we want to impute and the variables used to calculate distance
+  # Use dplyr select here. ALl 3 lines could just be one line
   temp_train <- d_train %>% filter_(train_cond)
   temp_train <- temp_train[c(imp_var, xvars)]
   temp_train <- temp_train %>% filter(complete.cases(.))
   
   # create labels, training data
+  # This is a dataframe just with the variables in the fmla that will be used to compute distance
   train <- temp_train[c(xvars)]
   
   # filter out acs vars
@@ -30,6 +37,7 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
   temp_test <- temp_test %>% filter(complete.cases(temp_test[c(xvars)]))
   
   # create test data set 
+  # This is a dataframe just with the variables in the acs that will be used to compute distance
   test <- temp_test[c(xvars)]
   
   
@@ -51,6 +59,7 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
   }
   
   # normalize training data to equally weight differences between variables
+  # I'm not sure whether we normalize before or after computing the distance. We should check this.
   for (i in colnames(train)) {
     if (i != id_var & sum(train[i])!=0 ){
       train[i] <- scale(train[i],center=0,scale=max(train[,i]))
@@ -109,6 +118,9 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
 
 runKNNestimate <- function(d_train,d_test,id_var,imp_var,train_cond,test_cond,lname) {
   # get KNN estimates for all leave types
+  # This creates a list of list of 6 lists (one for each leve type, with indicator variables for each empid)
+  # Why is mapply needed here? Can't we just call KNN1_scratch? I'm not sure what we're looping over
+  # I believe that est_df will be the same as the dataset that's returned if KNN1_scratch is simply called directly
   estimates <- mapply(KNN1_scratch, imp_var=imp_var,train_cond=train_cond, test_cond=test_cond, MoreArgs=list(d_train,d_test,id_var), SIMPLIFY = FALSE)
   # compile estimates into a single dataframe
   est_df <- data.frame(row.names=d_test$empid)
@@ -120,6 +132,9 @@ runKNNestimate <- function(d_train,d_test,id_var,imp_var,train_cond,test_cond,ln
     colnames(i) <- c("empid", paste(lname,names(estimates)[j],sep="") )
     est_df <- merge(est_df, i, by="empid", all.x=TRUE)
   }
+  
+  # This returns a dataframe of length equal to acs with the employee id and a column for each leave type
+  # that indicates whether or not they took the leave.
   return(est_df)
   
 }

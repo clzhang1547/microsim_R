@@ -24,7 +24,7 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
                illparent = "take_illparent",
                matdis = "take_matdis",
                bond = "take_bond")
-  
+  # I forget the logic for these conditionals. We should discuss.
   conditional <- c(own = "TRUE",
                    illspouse = "nevermarried == 0 & divorced == 0",
                    illchild = "TRUE",
@@ -32,8 +32,10 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
                    matdis = "female == 1 & nochildren == 0",
                    bond = "nochildren == 0")
   
-  
+  # Produces a 7 column dataframe of empid and indicator of whether each type of leave was taken
   predict <- runKNNestimate(d_fmla,d_acs,"empid", classes, conditional, conditional, "take_")
+  
+  # Merge these with the acs. Use left_join here.
   d_acs <- merge(d_acs,predict, by="empid")
   
   
@@ -50,6 +52,8 @@ fmla_impute <- function(filename, d_fmla, d_acs,leaveprogram) {
   
   #   Leave lengths are the same, except for own leaves, which are instead taken from the distribution of leave takers in FMLA survey reporting 
   #   receiving some pay from state programs
+  # Why are these imputed separately? Couldn't this be done in the above? In other words, why doesn't the above also
+  # grab the length from the nearest neighbor instead of just the take/don't take indicator?
   
   if (leaveprogram==TRUE) {
     conditional <- c(own = "recStatePay == 1 &length_own>0 & is.na(length_own)==FALSE",

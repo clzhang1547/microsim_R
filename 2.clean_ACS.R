@@ -17,7 +17,7 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
 
   d <-read.csv(person_csv)
   d_hh <-read.csv(house_csv)
-  d_cps <- read.csv("CPS2014extract.csv")
+  #d_cps <- read.csv("CPS2014extract.csv")
   
   # create variables
   
@@ -31,6 +31,7 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
   # -------------------------- #
   
   # load file
+  # This should be deleted right?
   d <- read.csv("ss15pma_short.csv")
   #d <- read.csv("ss16pca.csv")
   #d <- read.csv("ss15pma.csv")
@@ -155,7 +156,7 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
   
   # load imputation functions 
   source("1a.estimate_behavioral_CPS.R")
-  d <- CPS_impute(d, d_cps)
+  #d <- CPS_impute(d, d_cps)
   
   # -------------------------- #
   # Save the resulting dataset

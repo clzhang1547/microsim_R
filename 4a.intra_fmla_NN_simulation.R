@@ -174,6 +174,7 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond,leaveprog
   #predict <- runKNNestimate(d_in,d_impute, classes, conditional, test_cond, "length_")
   predict <- runRandDraw(d_impute,d_in, classes, conditional, test_cond, "length_")
   
+  # Use left_join here
   d_in <- merge(predict, d_in, by="empid", all.y=TRUE)
 
   vars_name=c()
@@ -182,6 +183,7 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond,leaveprog
   }
   
   # update leave vars
+  # hmmm I'm a bit lost here. Let's talk through it. I think a lot of this could be solved with left_join
   for (i in vars_name) { 
     x=paste(i,".x",sep="")
     y=paste(i,".y",sep="")
@@ -223,14 +225,17 @@ intra_impute <- function(d_fmla) {
   for (i in leave_types) {
     vars_name= c(vars_name, paste("take_",i, sep=""))
   }
+  # Can you explain this? Why is leave count not equal to number of leaves taken? Is leave count the number of leaves that we don't have info for?
   d_fmla['leave_count']=d_fmla['num_leaves_taken']- rowSums(d_fmla[,vars_name], na.rm=TRUE)
   d_fmla['long_flag']=0
   for (i in leave_types) {
-    take_var=paste("take_",i,sep="")
+    take_var=paste("take_",i,sep="") # An alternative way for this is to use paste0
     len_var=paste("length_",i,sep="")
     long_var=paste("long_",i,sep="")
     longlen_var=paste("longlength_",i,sep="")
     
+    # Let's talk about the use of "with" here. I prefer using dplyr, but I'm not sure how it copes with strings.
+    # Also the logic of what's going on.
     d_fmla['long_flag'] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,1,long_flag))  
     d_fmla[take_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,1,get(take_var)))
     d_fmla[len_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,get(longlen_var),get(len_var)))  

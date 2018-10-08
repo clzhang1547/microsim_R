@@ -97,15 +97,17 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
 
   # intra-fmla imputation for additional leave taking and lengths
   # see 4a. file for below function
+  # This creates 4 columns for each leave type stating whether or not they take the leave and how long. Correct?
   d_fmla <- intra_impute(d_fmla_orig)
 
   # In presence of program, apply leave-taking behavioral updates
+  # This adjusts the take_leave columns to include 1s for those that would have taken leave
   if (leaveprogram==TRUE) {
     d_fmla <-LEAVEPROGRAM(d_fmla)
   }
   
   # after all parameters have been accounted for, add/remove leave lengths for leaves taken/removed
-
+  # let's talk about the logic for these conditionals
   test_conditional <- c(own = "(take_own==1 & length_own==0)|(take_own==0 & length_own!=0 & is.na(length_own)==FALSE)", 
                         illspouse = "(take_illspouse==1 & length_illspouse==0)|(take_illspouse==0 & length_illspouse!=0 & is.na(length_illspouse)==FALSE)",
                         illchild = "(take_illchild==1 & length_illchild==0)|(take_illchild==0 & length_illchild!=0 & is.na(length_illchild)==FALSE)",
@@ -120,6 +122,7 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
                      matdis = "recStatePay == 1 &length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
                      bond = "recStatePay == 1 &length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
   }
+  # No big deal but could make this an else statement
   if (leaveprogram==FALSE) {
     conditional <- c(own = "recStatePay == 0 & length_own>0 & is.na(length_own)==FALSE",
                      illspouse = "recStatePay == 0 & length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
@@ -130,6 +133,7 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
   } 
 
   # see 4a. file for below function
+  # What does this return? The FMLA dataset with leave length for the other leave types we don't have info for?
   d_fmla <- impute_leave_length(d_fmla_orig, d_fmla, conditional, test_conditional)
 
 
@@ -137,6 +141,7 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
   
   # currently just simple nearest neighbor, K=1 
   # see 4. file for below function
+  # This is the big beast of getting leave behavior into the ACS.
   d_acs_imp <- fmla_impute(filename,d_fmla,d_acs,leaveprogram)
   
   # -------------Post-imputation functions-----------------
@@ -149,7 +154,7 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
   # TOPOFF: TOPOFF overrides participation behavior of BENEFITEFFECT
   # DEPENDENTALLOWANCE: independent of other functions
   
-  
+  # OK I'm stopping here. Will review below after first revision!
   # Allow for users to clone ACS individuals 
   d_acs_imp <- CLONEFACTOR(d_acs_imp, clone_factor)
   
@@ -227,6 +232,7 @@ LEAVEPROGRAM <- function(d) {
   for (i in leave_types) {
     take_var=paste("take_",i,sep="")
     need_var=paste("need_",i,sep="")
+    # I wonder if we should create another dummy variable of whether this person didn't take a leave pre-program
     d[,take_var] <- ifelse(d[,"unaffordable"]==1 & d[,need_var]==1,1,d[,take_var])
   }
 

@@ -8,6 +8,7 @@
 # """
 
 # House keeping
+# Interesting, this doesn't work interactively but it does form the command line. You should explain this to me.
 #rm(list=ls())
 cat("\014")  
 this.dir <- dirname(parent.frame(2)$ofile)
@@ -44,6 +45,7 @@ acs_csv <- clean_acs("ss15pma_short.csv","ss15hma_short.csv",csv=FALSE,filename=
 # Prescence of leave program scenario - testing out all the parameters
 #-----------------------------------------------------------------------------
 # sample parameters below are California's 
+# This returns an ACS dataset
 start_time <- Sys.time()
 d1 <- policy_simulation(filename="ACS_with_program",d_fmla=fmla_csv, d_acs=acs_csv,  leaveprogram=TRUE,bene_level=.55,
                         ext_base_effect=TRUE, extend_prob=.1, extend_days=1, extend_prop=1.1, topoff_rate=.1, topoff_minlength=10,
