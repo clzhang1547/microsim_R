@@ -111,7 +111,8 @@ policy_simulation <- function(filename, leaveprogram=FALSE, bene_level=1,
   
   # after all parameters have been accounted for, add/remove leave lengths for leaves taken/removed
   # H: let's talk about the logic for these conditionals
-      # L: Haha, yeah they are quite messy
+      # L: Haha, yeah they are quite messy. I think I don't need the 2nd condition after the | in test_conditional. 
+      #    Wrote this note when I was thinking there may be behavioral decrease in leave taking but ended up only increasing leave taking 
   test_conditional <- c(own = "(take_own==1 & length_own==0)|(take_own==0 & length_own!=0 & is.na(length_own)==FALSE)", 
                         illspouse = "(take_illspouse==1 & length_illspouse==0)|(take_illspouse==0 & length_illspouse!=0 & is.na(length_illspouse)==FALSE)",
                         illchild = "(take_illchild==1 & length_illchild==0)|(take_illchild==0 & length_illchild!=0 & is.na(length_illchild)==FALSE)",

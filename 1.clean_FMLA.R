@@ -109,9 +109,13 @@ clean_fmla <-function(csv=FALSE) {
   # leave reason for most recent leave (revised)
   fmla_2012_clean <- fmla_2012_clean %>% mutate(reason_take_rev = ifelse(is.na(A20) == FALSE & A20 == 2,A5_2_CAT_REV,A5_1_CAT_rev))
   
-  # leave reason for longest leave (if different)
-  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_reason = ifelse(is.na(A20) == FALSE & A20 == 2,A5_1_CAT,NA))
-  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_reason = ifelse(long_reason==reason_take,NA,long_reason))
+  # leave reason for longest leave
+  # 10/9, Luke: changing to be longest leave, regardless of if it is different from most recent leave or not
+  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_reason = A5_1_CAT)
+  
+  # old longest leave reason var
+  #fmla_2012_clean <- fmla_2012_clean %>% mutate(long_reason = ifelse(is.na(A20) == FALSE & A20 == 2,A5_1_CAT,NA))
+  #fmla_2012_clean <- fmla_2012_clean %>% mutate(long_reason = ifelse(long_reason==reason_take,NA,long_reason))
   
   # taken doctor
   fmla_2012_clean <- fmla_2012_clean %>% mutate(YNdoctor_take = ifelse(is.na(A20) == FALSE & A20 == 2,A11_2,A11_1),
@@ -140,8 +144,13 @@ clean_fmla <-function(csv=FALSE) {
   
   # length of leave for most recent leave
   fmla_2012_clean <- fmla_2012_clean %>% mutate(length = ifelse(is.na(A20) == FALSE & A20 == 2, A19_2_CAT_rev, A19_1_CAT_rev))
-  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_length = ifelse(is.na(A20) == FALSE & A20 == 2, A19_1_CAT_rev, NA))
-  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_length = ifelse(long_reason==reason_take,NA,long_length))
+  
+  # 10/9, Luke: changing to be longest leave, regardless of if it is different from most recent leave or not
+  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_length = A19_1_CAT_rev)
+  
+  # old longest leave length code
+  # fmla_2012_clean <- fmla_2012_clean %>% mutate(long_length = ifelse(is.na(A20) == FALSE & A20 == 2, A19_1_CAT_rev, NA))
+  # fmla_2012_clean <- fmla_2012_clean %>% mutate(long_length = ifelse(long_reason==reason_take,NA,long_length))
   
   fmla_2012_clean <- fmla_2012_clean %>% mutate(lengthsq = length^2,
                                                 lnlength = log(length),
@@ -216,6 +225,7 @@ clean_fmla <-function(csv=FALSE) {
   
   # also need to know if the longest leave is that type, and different from most recent type - long_*
   # Length of above leave - longlength_*
+  # 10/9, Luke: changing to be longest leave, regardless of if it is different from most recent leave or not
   
   # maternity disability
   fmla_2012_clean <- fmla_2012_clean %>% mutate(take_matdis = ifelse((A5_1_CAT == 21 & A11_1 == 1 & GENDER_CAT == 2 & (A20 != 2|is.na(A20)))
@@ -224,7 +234,7 @@ clean_fmla <-function(csv=FALSE) {
   fmla_2012_clean <- fmla_2012_clean %>% mutate(take_matdis = ifelse(is.na(A5_1_CAT) == 1 & is.na(A5_2_CAT) == 1, NA, take_matdis))
   fmla_2012_clean <- fmla_2012_clean %>% mutate(take_matdis = ifelse(is.na(take_matdis) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0, take_matdis))
   
-  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_matdis = ifelse((A5_1_CAT == 21 & A11_1 == 1 & GENDER_CAT == 2 & A20 == 2 ) 
+  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_matdis = ifelse((A5_1_CAT == 21 & A11_1 == 1 & GENDER_CAT == 2) 
                                                                      | A5_1_CAT_rev == 32, 1, 0))
   fmla_2012_clean <- fmla_2012_clean %>% mutate(long_matdis = ifelse(is.na(long_matdis) == 1,0,long_matdis))
   fmla_2012_clean <- fmla_2012_clean %>% mutate(long_matdis = ifelse(is.na(A5_1_CAT) == 1 & is.na(A5_2_CAT) == 1, NA, long_matdis))
@@ -246,7 +256,7 @@ clean_fmla <-function(csv=FALSE) {
   fmla_2012_clean <- fmla_2012_clean %>% mutate(take_bond = ifelse(is.na(A5_1_CAT) == 1, NA, take_bond))
   fmla_2012_clean <- fmla_2012_clean %>% mutate(take_bond = ifelse(is.na(take_bond) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0, take_bond))
   
-  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_bond = ifelse(A5_1_CAT==21 & (is.na(A11_1) == 1 | GENDER_CAT == 1 | (GENDER_CAT==2 & A11_1==2 & A5_1_CAT_rev!=32)) & A20 == 2,1,0))
+  fmla_2012_clean <- fmla_2012_clean %>% mutate(long_bond = ifelse(A5_1_CAT==21 & (is.na(A11_1) == 1 | GENDER_CAT == 1 | (GENDER_CAT==2 & A11_1==2 & A5_1_CAT_rev!=32)),1,0))
   fmla_2012_clean <- fmla_2012_clean %>% mutate(long_bond = ifelse(is.na(A5_1_CAT) == 1, NA, long_bond))
   fmla_2012_clean <- fmla_2012_clean %>% mutate(long_bond = ifelse(is.na(long_bond) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0, long_bond))
   

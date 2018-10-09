@@ -122,19 +122,26 @@ runImpute <- function(d_in, estimates, lname,tcond) {
 
 RandDraw <- function(d_train,d_test,y,z,test_cond) {
   
-  # filter fmla cases
+  # filter training cases
   d_temp <- d_train %>% filter_(z)
   train <- d_temp %>% filter(complete.cases(y))
   
-  # filter out acs vars
+  # filter out test cases
   test <- d_test %>% filter_(test_cond)
+  
   # random draw
   if (!y %in% colnames(test)) {
     test[y]=NA
   }
+  
   A <- function(x) train[sample(nrow(train), 1), y]
   test[y] <- apply(test[y],1, A)
-
+  
+  # replace with minimum of (median length of training set & long_length) if draw is greater the length of longest leave
+  # should think some more about what to do here, I think there's a better way.
+  # Also, raw leave length distribution looks weird on closer inspection in FMLA data
+  test$median <- median(train[,y])
+  test['new'] <- with(test, ifelse(!is.na(long_length) & get(y)>long_length,pmin(median, long_length),get(y)))
   return(data.frame(test[c("empid",y)]))
 }
 
@@ -183,7 +190,8 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond,leaveprog
   }
   
   # update leave vars
-  # hmmm I'm a bit lost here. Let's talk through it. I think a lot of this could be solved with left_join
+  # H: hmmm I'm a bit lost here. Let's talk through it. I think a lot of this could be solved with left_join
+    # L: I agree this is probably unnecessarily messy. I have a vague memory of trying left_join and something not happening the way I wanted.
   for (i in vars_name) { 
     x=paste(i,".x",sep="")
     y=paste(i,".y",sep="")
@@ -225,7 +233,9 @@ intra_impute <- function(d_fmla) {
   for (i in leave_types) {
     vars_name= c(vars_name, paste("take_",i, sep=""))
   }
-  # Can you explain this? Why is leave count not equal to number of leaves taken? Is leave count the number of leaves that we don't have info for?
+  # H: Can you explain this? Why is leave count not equal to number of leaves taken? Is leave count the number of leaves that we don't have info for?
+      # L: Yeah, exactly, leave_count is tracking the number of variables to be imputed. Sorry, probably should have used a better var name
+      #    Num_leaves_taken and the rowsums term are not consistent, hence this check.
   d_fmla['leave_count']=d_fmla['num_leaves_taken']- rowSums(d_fmla[,vars_name], na.rm=TRUE)
   d_fmla['long_flag']=0
   for (i in leave_types) {
@@ -238,9 +248,8 @@ intra_impute <- function(d_fmla) {
     # Also the logic of what's going on.
       # L: Sure, let's talk. I was having trouble with mutate() and iterative strings so this was my solution.
     d_fmla['long_flag'] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,1,long_flag))  
+    d_fmla[len_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,get(longlen_var),get(len_var))) 
     d_fmla[take_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,1,get(take_var)))
-    d_fmla[len_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_taken>1 & leave_count>0 & get(take_var)==0,get(longlen_var),get(len_var)))  
-    
   }
   
   # ---------------------------------------------------------------------------------------------------------

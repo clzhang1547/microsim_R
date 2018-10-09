@@ -17,7 +17,7 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
 
   d <-read.csv(person_csv)
   d_hh <-read.csv(house_csv)
-  #d_cps <- read.csv("CPS2014extract.csv")
+  d_cps <- read.csv("CPS2014extract.csv")
   
   # create variables
   
@@ -25,14 +25,16 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
   d_hh$faminc <- d_hh$FINCP
   d_hh$lnfaminc <- log(d_hh$FINCP)
   
+  d_hh <- d_hh[c("SERIALNO","nochildren","lnfaminc","faminc")]
    
   # -------------------------- #
   # ACS Person File
   # -------------------------- #
   
   # load file
-  # H: This should be deleted right?
- 	# L: yep, it was commented out in a later version I forgot to commit
+  #d <- read.csv("ss15pma_short.csv")
+  #d <- read.csv("ss16pca.csv")
+  #d <- read.csv("ss15pma.csv")
   
   
   # merge with household level vars 
@@ -74,7 +76,15 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
   
   
   # occupation
-  d$OCCP <- d$OCCP10 
+  # different years of ACS code occupation under different names, handling here
+  if ( is.null(d$OCCP) & !is.null(d$OCCP12)) {
+    d$OCCP <- d$OCCP12
+  }
+  if (!is.null(d$OCCP10) & is.null(d$OCCP) & is.null(d$OCCP12)) {
+    d$OCCP <- d$OCCP10   
+  }
+  d$OCCP <- unfactor(d$OCCP)
+  
   d <- d %>% mutate(occ_1 = ifelse(OCCP>=10 & OCCP<=950,1,0),
                       occ_2 = ifelse(OCCP>=1000 & OCCP<=3540,1,0),
                       occ_3 = ifelse(OCCP>=3600 & OCCP<=4650,1,0),
@@ -134,7 +144,7 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
   d <- subset(d, ESR==1|ESR==2)
   
   #  Restrict dataset to those that are not self-employed and not gov't workers
-  d <- subset(d, COW<=3 | COW>=7)
+  d <- subset(d, COW<=2 | COW>=8)
   
   # strip to only required variables to save memory
   d <- d[c("nochildren", "lnfaminc", "faminc", "lnearn","fem_cu6","fem_c617","fem_cu6and617","fem_nochild",
@@ -143,7 +153,7 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
            "GradSch", "black", "white", "asian", "other", "hisp", "OCCP", "occ_1", "occ_2", "occ_3", 
            "occ_4", "occ_5", "occ_6", "occ_7", "occ_8", "occ_9", "occ_10", "ind_1", "ind_2", "ind_3", "ind_4", 
            "ind_5", "ind_6", "ind_7", "ind_8", "ind_9", "ind_10", "ind_11", "ind_12", "ind_13", "weeks_worked",
-           "WAGP","WKHP","PWGTP","FER", "WKW")]
+           "WAGP","WKHP","PWGTP","FER", "WKW","COW","ESR")]
   
   #============================================
   # Impute variables from CPS
@@ -154,7 +164,7 @@ clean_acs <-function(person_csv,house_csv,csv=FALSE, filename) {
   
   # load imputation functions 
   source("1a.estimate_behavioral_CPS.R")
-  #d <- CPS_impute(d, d_cps)
+  d <- CPS_impute(d, d_cps)
   
   # -------------------------- #
   # Save the resulting dataset
