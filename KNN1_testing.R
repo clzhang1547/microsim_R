@@ -5,9 +5,11 @@
 # testing to see if KNN1 scratch performs same as canned package.
 # ============
 
-
+this.dir <- dirname(parent.frame(2)$ofile)
+setwd(this.dir)
 library(neighbr)
-
+library(plyr)
+library(dplyr)
 # create sample data set
 set.seed(124)
 
