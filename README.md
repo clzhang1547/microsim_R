@@ -9,17 +9,14 @@ Purpose of each file of R code:
 
 "1_NEW_cleaning_functions.R" : standardize/clean FMLA, ACS, and CPS survey variables
 
-"2_NEW_impute_functions.R"  : define:
-    KNN1 function written from scratch
-    functions to execute FMLA -> ACS imputation based on nearest neighbor's value
-    functions to impute additional leave taking behavior within the FMLA survey. Without such imputation, we only observe leave taking behavior for the most recent leave taken. Imputation done in the same manner as original Albelda/Clayton-Matthews (ACM) model; via logit regressions for leave types, and by random draw for leave lengths.
+"2_NEW_impute_functions.R"  : Several imputation functions and subfunctions to clean and impute leave taking behavior and length within the FMLA survey itself, and apply a basic counterfactual leave taking effect in the presence of a leave program. FMLA leave taking behavior is then imputed into the ACS. To execute FMLA -> ACS imputation, the default method is a nearest neighbor function. TODO: build alternative imputation methods to swap nearest neighbor with.
 
 "3_NEW_post_impute_functions.R" : define policy simulation functions
 
 "TEST_execution.R" : sample execution of Master policy simulation function
 
 ## Inputs
-ss15hri_short.csv: sample ACS household-level file
+ss16hri_short.csv: sample ACS household-level file
 
 ss16pri_short.csv: sample ACS person-level file
 
