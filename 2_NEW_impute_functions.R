@@ -645,7 +645,6 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
       d_acs <- merge(i, d_acs, by="id",all.y=TRUE)
     }  
   }
-  browser()
   saveRDS(d_acs, file="d_acs_impute_output.rds")
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
