@@ -12,58 +12,43 @@
 # Table of Contents
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. CLONEFACTOR
-# 2. PROGRAM_VARS
+# 2. PAY_SCHEDULE
 # 3. ELIGIBILITYRULES
-    #3a. runLogitEstimate
-# 4. UPTAKE
-# 5. BENEFITS
-# 6. BENEFITEFFECT
-# 7. TOPOFF
-# 8. DEPENDENTALLOWANCE
-# 9. CLEANUP
+# 4. EXTENDLEAVES
+    # 4A. runLogitEstimate
+# 5. UPTAKE
+    # 5A. check_caps
+# 6. BENEFITS
+# 7. BENEFITEFFECT
+# 8. TOPOFF
+# 9. DEPENDENTALLOWANCE
+# 10. CLEANUP
+    # 10a. check_caps
 
 
-
-#-------------------------CLONEFACTOR------------------
+# ============================ #
+# 1. CLONEFACTOR
+# ============================ #
 # allow users to clone ACS individuals
 
 CLONEFACTOR <- function(d, clone_factor) {
   if (clone_factor > 0) {
     d$clone_flag=0
     num_clone <- round(clone_factor*nrow(d), digits=0)
-    d_clones <- data.frame(sample(d$empid,num_clone,replace=TRUE))
-    colnames(d_clones)[1] <- "empid"
-    d_clones <- join(d_clones,d,by='empid', type='left')
+    d_clones <- data.frame(sample(d$id,num_clone,replace=TRUE))
+    colnames(d_clones)[1] <- "id"
+    d_clones <- join(d_clones,d,by='id', type='left')
     d_clones$clone_flag=1
     d <- rbind(d,d_clones)
   }
   return(d)
 }
 
+ 
 
-# -------------------PROGRAM_VARS------------------
-# Adding base values for new ACS variables involving imputed FMLA values
-
-PROGRAM_VARS <- function(d, classes, leaveprogram) {
-  
-  
-  # replace leave taking and length NA's with zeros now
-  # wanted to distinguish between NAs and zeros in FMLA survey, 
-  # but no need for that in ACS now that we're "certain" of ACS leave taking behavior 
-  # We are "certain" because we only imputed leave takers/non-takers, discarding those with 
-  # uncertain/ineligible status (take_[type]=NA).
-  
-  for (i in leave_types) {
-    len_var=paste("length_",i,sep="")
-    take_var=paste("take_",i,sep="")
-    d[len_var] <- with(d, ifelse(is.na(get(len_var)),0,get(len_var)))
-    d[take_var] <- with(d, ifelse(is.na(get(take_var)),0,get(take_var)))
-  }
-  
-  return(d)
-} 
-
-# -------------------PAY_SCHEDULE------------------
+# ============================ #
+# 2. PAY_SCHEDULE
+# ============================ #
 # Calculate pay schedule for employer paid leave
 
 PAY_SCHEDULE <- function(d) {
@@ -138,7 +123,9 @@ PAY_SCHEDULE <- function(d) {
   return(d)
 }
 
-#---------ELIGIBILITYRULES-------------------------------------------------------------------------------------------------------------
+# ============================ #
+# 3. ELIGIBILITYRULES
+# ============================ #
 # apply user-specified eligibility criteria and set initial 
 
 ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, annhours=NULL, minsize=NULL, bene_level) {
@@ -181,7 +168,10 @@ ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, annhours=NULL, minsiz
 }
 
 
-# -------------------EXTENDLEAVES------------------
+# ============================ #
+# 4. EXTENDLEAVES
+# ============================ #
+
 # Option to simulate extension of leaves in the presence of an FMLA program
 
 EXTENDLEAVES <-function(d_train, d_test,wait_period, ext_base_effect, 
@@ -210,20 +200,20 @@ EXTENDLEAVES <-function(d_train, d_test,wait_period, ext_base_effect,
     weight <- c("~ fixed_weight")
     
     # Run Estimation
-    estimates <- mapply(runLogitEstimate, x = specif, y = conditional, z = weight, 
-                        MoreArgs=list(d_in=d_train), 
-                        SIMPLIFY = FALSE)
-  
+    # INPUT: FMLA data to train logit estimates on
+    estimates <- runLogitEstimate(x = specif, y = conditional, z = weight, d_in=d_train)
+    
+    # OUTPUT: logit coefficients to model probability of taking a longer leave.
+    
     # calculate a column of probabilities of each leave type based on individual characteristics
-    var_prob= "longerLeave_prob"
     model=estimates
-    d_test[var_prob]=model[[1]][["(Intercept)"]]
-    for (dem in names(model[[1]])) {
+    d_test["longerLeave_prob"]=model[["(Intercept)"]]
+    for (dem in names(model)) {
       if (dem !='(Intercept)') { 
         d_test[is.na(d_test[,dem]),dem]=0
-        d_test[,var_prob]= d_test[,var_prob] + d_test[,dem]*model[[1]][[dem]]
+        d_test[,"longerLeave_prob"]= d_test[,"longerLeave_prob"] + d_test[,dem]*model[[dem]]
       }
-      d_test[,var_prob]=exp(d_test[,var_prob])/(1+exp(d_test[,var_prob]))
+      d_test[,"longerLeave_prob"]=exp(d_test[,"longerLeave_prob"])/(1+exp(d_test[,"longerLeave_prob"]))
     }
     
     # randomly determine if longer leave is taken
@@ -333,12 +323,14 @@ EXTENDLEAVES <-function(d_train, d_test,wait_period, ext_base_effect,
 }
 
 # ============================ #
-# 3A. runLogitEstimate
+# 4A. runLogitEstimate
 # ============================ #
 # See function 1A, file 2 - impute functions
 
 
-#---------UPTAKE------------------------------------------------------------------------------------------------------------------------
+# ============================ #
+# 5. UPTAKE
+# ============================ #
 # specifies uptake rate of those that are eligible for the paid leave program
 # default is "full" - all who are eligible and would receive more money than employer would pay
 # would pay choose to participate 
@@ -391,6 +383,22 @@ UPTAKE <- function(d, own_uptake, matdis_uptake, bond_uptake, illparent_uptake,
   d <- d %>% mutate(particip= ifelse(particip_length==0,0, particip))
   
   # cap particip_length at max program days
+  # INPUT: ACS data set
+  d <- check_caps(d,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
+                  maxlen_total, maxlen_DI, maxlen_PFL)
+  # OUTPUT: ACS data set with participating leave length capped at user-specified program maximums
+  
+  # clean up vars
+  d <- d[, !(names(d) %in% c('rand', 'change_flag','reduce'))]
+  return(d)
+}
+# ============================ #
+# 5A. check_caps
+# ============================ #
+# cap particip_length at max program days
+check_caps <- function(d,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
+                       maxlen_total, maxlen_DI, maxlen_PFL) {
+  
   # for each individual leave type
   for (i in leave_types) {
     plen_var= paste("plen_",i, sep="")
@@ -443,14 +451,11 @@ UPTAKE <- function(d, own_uptake, matdis_uptake, bond_uptake, illparent_uptake,
     d <- d %>% mutate(DI_plen=plen_matdis+plen_own)
     d <- d %>% mutate(PFL_plen=plen_bond+plen_illparent+plen_illchild+plen_illspouse)
   }
-  
-  # clean up vars
-  d <- d[, !(names(d) %in% c('rand', 'change_flag','reduce'))]
   return(d)
 }
-
-
-# -------------------BENEFITS------------------
+# ============================ #
+# 6. BENEFITS
+# ============================ #
 # Adding base values for new ACS variables involving imputed FMLA values
 
 BENEFITS <- function(d, leaveprogram) {
@@ -472,7 +477,9 @@ BENEFITS <- function(d, leaveprogram) {
   }
   return(d)
 }
-# -------------------BENEFITEFFECT------------------
+# ============================ #
+# 7. BENEFITEFFECT
+# ============================ #
 # Accounting for some "cost" of applying for the program when deciding between employer paid leave and program
 
 
@@ -553,7 +560,9 @@ BENEFITEFFECT <- function(d) {
   return(d)
 }
 
-# -------------------TOPOFF------------------
+# ============================ #
+# 8. TOPOFF
+# ============================ #
 # employers who would pay their employees
 # 100 percent of wages while on leave would instead require their employees to participate
 # in the program and would "top-off" the program benefits by paying the difference
@@ -599,7 +608,9 @@ TOPOFF <- function(d, topoff_rate, topoff_minlength) {
   return(d)
 }
 
-# -------------------------DEPENDENTALLOWANCE------------------
+# ============================ #
+# 9. DEPENDENTALLOWANCE
+# ============================ #
 # include a flat weekly dependent allowance for families with children
 
 DEPENDENTALLOWANCE <- function(d,dependent_allow) {
@@ -607,75 +618,26 @@ DEPENDENTALLOWANCE <- function(d,dependent_allow) {
   return(d)
 }
 
-# -------------------------CLEANUP------------------
+# ============================ #
+# 10. CLEANUP
+# ============================ #
 # Final variable alterations and consistency checks
 
 CLEANUP <- function(d, week_bene_cap,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
                     maxlen_total,maxlen_DI,maxlen_PFL) {
   
-  # Check caps again 
-  
-  # cap particip_length at max program days
-  # for each individual leave type
-  for (i in leave_types) {
-    plen_var= paste("plen_",i, sep="")
-    max_val=paste("maxlen_",i,sep="")
-    d[plen_var] <- with(d, ifelse(get(plen_var)>get(max_val),get(max_val), get(plen_var)))
-  }
-  
-  # apply cap for DI and PFL classes of leaves
-  if (maxlen_DI!=maxlen_bond+maxlen_matdis) {
-    d <- d %>% mutate(DI_plen=plen_matdis+plen_own)
-    d['DI_plen'] <- with(d, ifelse(DI_plen>maxlen_DI,maxlen_DI,DI_plen))
-    # evenly distributed cap among leave types
-    d['reduce'] <- with(d, ifelse(plen_matdis+plen_own!=0, DI_plen/(plen_matdis+plen_own),0))
-    d['plen_matdis']=round(d[,'plen_matdis']*d[,'reduce'])
-    d['plen_own']=round(d[,'plen_own']*d[,'reduce'])
-  }
-  
-  if (maxlen_PFL!=maxlen_illparent+maxlen_illspouse+maxlen_illchild+maxlen_bond) {  
-    d <- d %>% mutate(PFL_plen=plen_bond+plen_illparent+plen_illchild+plen_illspouse)
-    d['PFL_plen'] <- with(d, ifelse(PFL_plen>maxlen_PFL,maxlen_PFL,PFL_plen))
-    # evenly distributed cap among leave types
-    d['reduce'] <- with(d, ifelse(plen_bond+plen_illparent+plen_illchild+plen_illspouse!=0, 
-                                  PFL_plen/(plen_bond+plen_illparent+plen_illchild+plen_illspouse),0))
-    d['plen_bond']=round(d[,'plen_bond']*d[,'reduce'])
-    d['plen_illchild']=round(d[,'plen_illchild']*d[,'reduce'])
-    d['plen_illspouse']=round(d[,'plen_illspouse']*d[,'reduce'])
-    d['plen_illparent']=round(d[,'plen_illparent']*d[,'reduce'])
-  }
-  
-  # apply cap for all leaves
-  if (maxlen_total!=maxlen_DI+maxlen_PFL | maxlen_total!=maxlen_illparent+maxlen_illspouse+maxlen_illchild+maxlen_bond+maxlen_bond+maxlen_matdis) {
-    d['particip_length']=0
-    for (i in leave_types) {
-      plen_var=paste("plen_",i,sep="")
-      d <- d %>% mutate(particip_length=particip_length+get(plen_var))
-    }
-    d['particip_length'] <- with(d, ifelse(particip_length>maxlen_total,maxlen_total,particip_length))
-    d['reduce'] <- with(d, ifelse(plen_matdis+plen_own+plen_bond+plen_illparent+plen_illchild+plen_illspouse!=0, 
-                                  particip_length/(plen_matdis+plen_own+plen_bond+plen_illparent+plen_illchild+plen_illspouse),0))
-    
-    # evenly distributed cap among leave types
-    d['plen_matdis']=round(d[,'plen_matdis']*d[,'reduce'])
-    d['plen_own']=round(d[,'plen_own']*d[,'reduce'])
-    d['plen_bond']=round(d[,'plen_bond']*d[,'reduce'])
-    d['plen_illchild']=round(d[,'plen_illchild']*d[,'reduce'])
-    d['plen_illspouse']=round(d[,'plen_illspouse']*d[,'reduce'])
-    d['plen_illparent']=round(d[,'plen_illparent']*d[,'reduce'])
-    
-    # recalculate DI/PFL lengths
-    d <- d %>% mutate(DI_plen=plen_matdis+plen_own)
-    d <- d %>% mutate(PFL_plen=plen_bond+plen_illparent+plen_illchild+plen_illspouse)
-  }
+  # Check leave length participation caps again 
+  # INPUT: ACS data set 
+  d <- check_caps(d,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
+                  maxlen_total, maxlen_DI, maxlen_PFL)
+  # OUTPUT: ACS data set with participating leave length capped at user-specified program maximums
   
   # cap benefit payments at program's weekly benefit cap
-  d <- d %>% mutate(actual_benefits= ifelse(actual_benefits>week_bene_cap*particip_length/5,
-                                            week_bene_cap*particip_length/5, actual_benefits))
+  d <- d %>% mutate(actual_benefits= ifelse(actual_benefits>ceiling(week_bene_cap*particip_length)/5,
+                                            ceiling(week_bene_cap*particip_length)/5, actual_benefits))
   
   # make sure those with particip_length 0 are also particip 0
   d <- d %>% mutate(particip= ifelse(particip_length==0,0, particip))
-  
   
   # calculate leave specific benefits
   for (i in leave_types) {
@@ -687,3 +649,8 @@ CLEANUP <- function(d, week_bene_cap,maxlen_own, maxlen_matdis, maxlen_bond, max
   
   return(d)
 }
+
+# ============================ #
+# 10A. check_caps
+# ============================ #
+# see function 5A.

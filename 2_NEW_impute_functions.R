@@ -35,6 +35,7 @@
     # 4d. runOrdinalImpute
 # 5. impute_fmla_to_acs
     # 5a. KNN1_scratch
+    # 5b. impute_leave_length
 
 # ============================ #
 # 1. impute_intra_fmla
@@ -139,18 +140,22 @@ impute_intra_fmla <- function(d_fmla) {
     
     impute <- mapply(runLogitImpute, estimate=nest_estimate, tcond= test_conditional, var_name=vars_name, 
                      MoreArgs=list(d_in=d_fmla,multi_var=TRUE), SIMPLIFY = FALSE)
-    #OUTPUT: probabilities 
-    
+    #OUTPUT: probabilities of each FMLA individual taking/needing a type of leave
+
     # Run leave type imputation on multi-leave takers based on probability
-    # INPUT: 
+    # INPUT: FMLA data, probabilities of taking/needing leave type
     d_fmla <- add_leave_types(d_fmla,lname, impute) 
+    # OUTPUT:  FMLA data with imputed leave types for those taking/needing multiple leaves, 
+    #        of which one or more are not observed in their responses to the FMLA survey
   }
+  
+  # first run imputes take_* variables 
   temp_func("take")
   
   # ---------------------------------------------------------------------------------------------------------
   # C. Types of Leave Needed for multiple leave needers
   # ---------------------------------------------------------------------------------------------------------
-  # perform same operations on need_* variables
+  # second run: perform same operations on need_* variables
   temp_func("need")
 
   return(d_fmla)
@@ -198,13 +203,13 @@ runLogitImpute <- function(d_in, estimate, var_name, tcond, multi_var=FALSE) {
   if (multi_var==FALSE) {
     d['rand']=runif(nrow(d))
     d[var_name] <- with(d, ifelse(rand>get(var_prob),0,1))
-    keep <- c(var_name, "empid")
+    keep <- c(var_name, "id")
     d <- d[ , (names(d) %in% keep)]
-    d <- merge( d, d_in, by="empid",all.y=TRUE)
+    d <- merge( d, d_in, by="id",all.y=TRUE)
     return(d)
   }
   else {
-    keep <- c(var_prob, "empid")
+    keep <- c(var_prob, "id")
     d <- d[ , (names(d) %in% keep)]
     return(d)
   }
@@ -217,7 +222,7 @@ add_leave_types <- function(d, lname, impute) {
   
   # merge imputed values with fmla data
   for (i in impute) {
-    d <- merge(i, d, by="empid",all.y=TRUE)
+    d <- merge(i, d, by="id",all.y=TRUE)
     # set missing probability = 0
     d[is.na(d[colnames(i[2])]), colnames(i[2])] <- 0
   }  
@@ -290,13 +295,18 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond, fmla) {
   
   # moving to draw from leave distribution rather than KNN prediction for computational issues
   #predict <- runKNNestimate(d_in,d_impute, classes, conditional, test_cond, "length_")
+  #INPUTS: variable requiring imputation, conditionals to filter test and training data on,
+  #        ACS or FMLA observations requiring imputed leave length (test data), FMLA observations constituting the
+  #        sample from which to impute length from (training data), and specification whether or not
+  #        test data is FMLA data or not (operations differ for ACS length imputation)
   predict <- mapply(runRandDraw, y=classes, z=conditional,test_cond=test_cond,
                     MoreArgs = list(d_train=d_impute, d_test=d_in, lname="length_", fmla=fmla),
                     SIMPLIFY = FALSE)
+  # Outputs: data sets of imputed leave length values for ACS or FMLA observations requiring them
   
   # merge imputed values with fmla data
   for (i in predict) {
-    d_in <- merge(i, d_in, by="empid",all.y=TRUE)
+    d_in <- merge(i, d_in, by="id",all.y=TRUE)
   }  
 
   vars_name=c()
@@ -367,7 +377,7 @@ runRandDraw <- function(d_train,d_test,y,z,test_cond,lname, fmla=TRUE) {
   }
   
   
-  est_df <- test[c("empid",y)]
+  est_df <- test[c("id",y)]
   return(est_df) 
 
 }
@@ -394,9 +404,16 @@ impute_cps_to_acs <- function(d_acs, d_cps){
   conditional = c(paid_hrly= "TRUE")
   weight = c(paid_hrly = "~ marsupwt")
   
+  # INPUTS: CPS (training) data set, logit regression model specification, training filter condition, weight to use
   estimate <- runLogitEstimate(d_cps,specif,conditional,weight)
+  # OUTPUT: Logit model estimates for getting paid hourly dummy
+  
+  # INPUTS: ACS (test) data set, Logit model estimates for getting paid hourly dummy, variable to impute
+  #         test filtering condition
   d_acs <-runLogitImpute(d_acs, estimate,"paid_hrly","TRUE") 
-
+  # OUTPUT: ACS data with imputed paid hourly variable
+  
+  # INPUTS/OUTPUTS are similar for remaining logits
   
   # ordered logit for number of employers
   # biggest problem with ordered logit currently is it is unweighted; can't use CPS weight without getting a non-convergence error
@@ -407,9 +424,16 @@ impute_cps_to_acs <- function(d_acs, d_cps){
   conditional = c(num_employers= "TRUE")
   weight = c(num_employers = "marsupwt")
   
-  
+  # INPUTS: CPS (training) data set, ordinal regression model specification, training filter condition, weight to use
   estimate <- runOrdinalEstimate(d_cps,specif,conditional,weight)
+  # OUTPUTS: ordinal model estimates for number of employers dummy
+  
+  # INPUTS: ACS (test) data set, ordinal model estimates for getting number of employers dummy, variable to impute
+  #         test filtering condition
   d_acs <- runOrdinalImpute(d_acs, estimate,"num_emp","TRUE")
+  # OUTPUTS: ACS data with imputed number of employers variable
+  
+  # INPUTS/OUTPUTS are similar for remaining ordinals
   
   # ordered logit for weeks worked - 50-52 weeks
   specif = c(iweeks_worked= paste("factor(wkswork) ~  age + agesq +  black + hisp + lnearn"))
@@ -554,8 +578,8 @@ runOrdinalImpute <- function(d_in, estimate, varname, tcond) {
       }
     }
     # keep just the new variable and id
-    d <- d[c(varname, "empid")]
-    d_in <- merge( d, d_in, by="empid",all.y=TRUE)
+    d <- d[c(varname, "id")]
+    d_in <- merge( d, d_in, by="id",all.y=TRUE)
   }
   return(d_in)
 }  
@@ -565,7 +589,14 @@ runOrdinalImpute <- function(d_in, estimate, varname, tcond) {
 # ============================ #
 # Based on user-specified method, impute leave taking behavior in fmla to ACS
 # default is KNN1
-impute_fmla_to_acs <- function(d_fmla, d_acs,leaveprogram, impute_method,xvars) {
+impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_method,xvars) {
+  # d_fmla - modified fmla data set
+  # d_fmla_orig - unmodified fmla data set
+  # d_acs - ACS data set
+  # leaveprogram - TRUE or FALSE. Presence or absence of a leave program. 
+  # impute_method - method to use for imputation
+  # xvars - dependent variables used by imputation method. Must be present and have same name in 
+  #         both fmla and acs data sets.
   
   # ---------------------------------------------------------------------------------------------------------
   # A. Leave characteristics needed: leave taking behavior, proportion of income paid by employer,
@@ -592,22 +623,41 @@ impute_fmla_to_acs <- function(d_fmla, d_acs,leaveprogram, impute_method,xvars) 
                    prop_pay="TRUE",
                    unaffordable="TRUE")
 
+  # Save ACS and FMLA Dataframes at this point to document format that alternative imputation methods 
+  # will need to expect
+  saveRDS(d_fmla, file="d_fmla_impute_input.rds")
+  saveRDS(d_acs, file="d_acs_impute_input.rds")
   # KNN1 imputation method
   if (impute_method=="KNN1") {
     # separate KNN1 calls for each unique conditional doesn't work because of differing missing values
+    
+    # INPUTS: variable to be imputed, conditionals to filter training and test data on, FMLA data (training), and
+    #         ACS data (test), id variable, and dependent variables to use in imputation
     impute <- mapply(KNN1_scratch, imp_var=classes,train_cond=conditional, test_cond=conditional,
-                        MoreArgs=list(d_train=d_fmla,d_test=d_acs,id_var='empid',xvars=xvars), SIMPLIFY = FALSE)
-   # merge imputed values with fmla data
+                        MoreArgs=list(d_train=d_fmla,d_test=d_acs,xvars=xvars), SIMPLIFY = FALSE)
+    # OUTPUTS: A data set for each leave taking/other variables requiring imputation. Each data set contains id for ACS
+    #          observations in the leave variable universe, and a dummy indicating whether that ACS individual
+    #          takes that kind of leave of not, as well as a dummy for whether leave needing is due to 
+    #          unaffordability, and the proportion of pay received from employer while on leave.
+    
+   # merge imputed values with acs data
     for (i in impute) {
-      d_acs <- merge(i, d_acs, by="empid",all.y=TRUE)
+      d_acs <- merge(i, d_acs, by="id",all.y=TRUE)
     }  
   }
+  browser()
+  saveRDS(d_acs, file="d_acs_impute_output.rds")
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # alternate imputation methods will go here
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+  # for example:
   
+  if (impute_method=="Hocus Pocus") {
+    # Hocus pocus function calls here
+  }
+  
+
   # ---------------------------------------------------------------------------------------------------------
   # B. Impute Days of Leave Taken
   # ---------------------------------------------------------------------------------------------------------
@@ -651,7 +701,27 @@ impute_fmla_to_acs <- function(d_fmla, d_acs,leaveprogram, impute_method,xvars) 
                         matdis = "take_matdis==1 & female == 1 & nochildren == 0",
                         bond = "take_bond==1 & nochildren == 0")
   
-  d_acs <- impute_leave_length(d_fmla, d_acs, conditional, test_conditional, fmla=FALSE)
+  # INPUTS: unmodified FMLA survey as the training data, ACS as test data,
+  #         and conditionals for filter the two sets. Using unmodified survey for leave lengths,
+  #         since modified FMLA survey contains no new information about leave lengths, and 
+  #         the intra-FMLA imputed leave lengths a random draw from that imputed data
+  #         would produced a biased 
+  #         estimate of leave length
+  d_acs <- impute_leave_length(d_fmla_orig, d_acs, conditional, test_conditional, fmla=FALSE)
+  # OUTPUT: ACS data with lengths for leaves imputed
+  
+  # replace leave taking and length NA's with zeros now
+  # wanted to distinguish between NAs and zeros in FMLA survey, 
+  # but no need for that in ACS now that we're "certain" of ACS leave taking behavior 
+  # We are "certain" because we only imputed leave takers/non-takers, discarding those with 
+  # uncertain/ineligible status (take_[type]=NA).
+  
+  for (i in leave_types) {
+    len_var=paste("length_",i,sep="")
+    take_var=paste("take_",i,sep="")
+    d_acs[len_var] <- with(d_acs, ifelse(is.na(get(len_var)),0,get(len_var)))
+    d_acs[take_var] <- with(d_acs, ifelse(is.na(get(take_var)),0,get(take_var)))
+  }
   
   return(d_acs)
 }
@@ -661,7 +731,7 @@ impute_fmla_to_acs <- function(d_fmla, d_acs,leaveprogram, impute_method,xvars) 
 # ============================ #
 # Define KNN1 matching method
 
-KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond, xvars) { 
+KNN1_scratch <- function(d_train, d_test, imp_var, train_cond, test_cond, xvars) { 
   
   # This returns a dataframe of length equal to acs with the employee id and a column for each leave type
   # that indicates whether or not they took the leave.
@@ -676,15 +746,17 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
   # create training data
   
   # filter by training condition
-  temp_train <- d_train %>% filter_(train_cond)
+  train <- d_train %>% filter_(train_cond)
   # ensure that only nonmissing data are used in training
-  temp_train <- temp_train %>% filter(complete.cases(select(temp_train, imp_var,xvars)))
-  train <- select(temp_train, xvars)
+  train <- train %>% filter(complete.cases(select(train, 'id', imp_var,xvars)))
+  train <- select(train, imp_var, xvars)
+  train ['nbor_id'] <- as.numeric(rownames(train))
+  train ['id'] <- NULL
   
   # create test data set 
   # This is a dataframe just with the variables in the acs that will be used to compute distance
   test <- d_test %>% filter_(test_cond)
-  test <- select(test, xvars)
+  test <- select(test, 'id', xvars)
   test <- test %>% filter(complete.cases(.))
   
   # Initial checks
@@ -699,22 +771,17 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
     stop("missing values not allowed in train_test or test_set")
   }
   
-  # make sure colnames of train and test data are the same
-  if (!all(colnames(train)==colnames(test))) {
-    stop("Error: columns of train and test differ from one another")
-  }
-  
   # normalize training data to equally weight differences between variables
   # H: I'm not sure whether we normalize before or after computing the distance. We should check this.
   # L: This is normalizing before checking the distance. I'm pretty sure that's where it should happen.
   for (i in colnames(train)) {
-    if (i != id_var & sum(train[i])!=0 ){
+    if (i != 'nbor_id' & i != imp_var & sum(train[i])!=0 ){
       train[i] <- scale(train[i],center=0,scale=max(train[,i]))
     }
   } 
   
   for (i in colnames(test)) {
-    if (i != id_var & sum(test[i])!=0 ){
+    if (i != 'id' & sum(test[i])!=0 ){
       test[i] <- scale(test[i],center=0,scale=max(test[,i]))
     }
   } 
@@ -726,26 +793,23 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
   m_test <- as.matrix(test)
   m_train <-as.matrix(train)
   
-  cols <-ncol(m_test)
   nest_test <- list()
   nest_train <- list()
   # nested lists of vectors for apply functions
   
   nest_test <- lapply(seq(1,nrow(m_test)) , function(y){ 
-    m_test[y,2:cols]
+    m_test[y,colnames(test)!='id']
   })
   nest_train <- lapply(seq(1,nrow(m_train)) , function(y){ 
-    m_train[y,2:cols]
+    m_train[y,colnames(train)!='nbor_id' & colnames(train)!=imp_var]
   })
   
   # mark neighbor as minimium distance
   start_time <-Sys.time()
-  
-  min_start <- ncol(train)
+  min_start <- ncol(train)-2
   
   f1 <- function(j) {
     min_dist <- min_start
-    nbor <- NA
     d <- mapply(find_dist, x=nest_train, MoreArgs=list(y=j))
     return(which.min(d))
   }
@@ -756,12 +820,14 @@ KNN1_scratch <- function(d_train, d_test, id_var, imp_var, train_cond, test_cond
   
   temp <- lapply(nest_test, f1)
   temp <- unlist(temp)
-  temp <- cbind(test["empid"],as.data.frame(unlist(temp)))
-  colnames(temp)[colnames(temp)=="unlist(temp)"] <- "nbor"
-  temp_train$nbor <- rownames(temp_train)
-  temp <- join(temp[c("empid","nbor")], temp_train[c("nbor",imp_var)], by=c("nbor"), type="left")
-  temp <- temp[c("empid",imp_var)]
+  temp <- cbind(test["id"],as.data.frame(unlist(temp)))
+  colnames(temp)[colnames(temp)=="unlist(temp)"] <- "nbor_id"
+  temp <- join(temp[c("id","nbor_id")], train[c("nbor_id",imp_var)], by=c("nbor_id"), type="left")
+  temp <- temp[c("id",imp_var)]
   return(temp)
 }
 
-
+# ============================ #
+# 5B. impute_leave_length
+# ============================ #
+# see function 3

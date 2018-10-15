@@ -12,9 +12,6 @@
 # ACM parameter functions not implemented:
 
 # PLACEOFWORK: Better implemented in the GUI filtering of ACS data 
-# SELFEMPLOYED: Better implemented in the GUI filtering of ACS data 
-# GOVERNMENT: Better implemented in the GUI filtering of ACS data 
-# WEIGHTFACTOR: Unsure of the value of this function
 # CALIBRATE: Unsure of the value of this function
 # COMMENT, FILE: Made obsolete by GUI
 # MISSINGVALUE: Output command better handled by GUI
@@ -26,6 +23,7 @@
 # default values are all false. In this case, simulation will result be prediction of leave taking in as-is scenario of "absence of program"
 # Parameters:
 # impute_method - method for imputation. Default is Nearest Neighbor, K=1
+# xvars - xvars for imputation method to use. Default for Nearest Neighbor, K=1
 # leaveprogram - FALSE for absence of any leave program, TRUE for leave program with default assumptions
 #                assumptions are modified by below parameters
 # uptake - uptake calculation approach
@@ -65,7 +63,11 @@
 
 policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, useCSV=TRUE, saveDF=FALSE,
                               leaveprogram=FALSE, GOVERNMENT=FALSE, SELFEMP=FALSE, 
-                              impute_method="KNN1", bene_level=1, topoff_rate=0, topoff_minlength=0, 
+                              impute_method="KNN1",
+                              xvars=c("widowed", "divorced", "separated", "nevermarried", "female", 
+                                         "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
+                                         "white", "asian", "hisp","nochildren"),
+                              bene_level=1, topoff_rate=0, topoff_minlength=0, 
                               bene_effect=0, dependent_allow=0, full_particip_needer=1, own_uptake=1, matdis_uptake=1, bond_uptake=1, illparent_uptake=1, 
                               illspouse_uptake=1, illchild_uptake=1, extend_leaves=0,wait_period=0,
                               clone_factor=0, ext_base_effect=TRUE, extend_prob=0, extend_days=0, extend_prop=1,
@@ -124,7 +126,10 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     #-----CPS to ACS Imputation-----
     # Impute hourly worker, weeks worked, and firm size variables from CPS into ACS. 
     # These are needed for leave program eligibilitly determination
+    
+    # INPUT: cleaned acs, cps files
     d_acs <- impute_cps_to_acs(d_acs, d_cps)
+    # OUTPUT: cleaned acs with imputed weeks worked, employer size, and hourly worker status
   }
   
   else { 
@@ -214,15 +219,14 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
 
   #-----FMLA to ACS Imputation-----
   
-  # dependent vars to match on
-  xvars <- c("empid", "widowed", "divorced", "separated", "nevermarried", "female", 
-             "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
-             "white", "asian", "hisp","nochildren")
-  
   # default is just simple nearest neighbor, K=1 
   # This is the big beast of getting leave behavior into the ACS.
-    d_acs_imp <- impute_fmla_to_acs(d_fmla,d_acs,leaveprogram, impute_method, xvars)  
-
+  # INPUT: cleaned acs/fmla data, leaveprogram=TRUE/FALSE, method for imputation, dependent variables 
+  #         used for imputation
+    d_acs_imp <- impute_fmla_to_acs(d_fmla,d_fmla_orig,d_acs,leaveprogram, impute_method, xvars)  
+  # OUTPUT: ACS data with imputed values for a) leave taking and needing, b) proportion of pay received from
+  #         employer while on leave, and c) whether leave needed was not taken due to unaffordability 
+    
   # TODO: define expected input and outputs of alt matching method functions
   
   
@@ -238,29 +242,37 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   
   # OK I'm stopping here. Will review below after first revision!
   # Allow for users to clone ACS individuals 
+  # INPUT: ACS file
   d_acs_imp <- CLONEFACTOR(d_acs_imp, clone_factor)
-  
-  # creating benefit vars in ACS based on imputations/parameters
-  d_acs_imp <- PROGRAM_VARS(d_acs_imp, classes=c("own", "illspouse", "illchild","illparent","matdis","bond"), leaveprogram)
-  
-  # After other benefits/participation decisions made, flag those who 
-  # will have exhausted employer benefits with leave remaining, and will apply to program for remainder
+  # OUTPUT: ACS file with user-specifed number of cloned records
+     
+  # Assign employer pay schedule for duration of leaves via imputation from Westat 2001 survey probabilities
+  # Then, flag those who will have exhausted employer benefits with leave remaining, and will apply 
+  # to leave program for remainder of their leave
+  # INPUT: ACS file
   d_acs_imp <- PAY_SCHEDULE(d_acs_imp)
+  # OUTPUT: ACS file with imputed pay schedule, and date of benefit exhaustion for those with partial pay
   
   # Program eligibility and uptake functions
   if (leaveprogram==TRUE) {
+    # INPUT: ACS file
     d_acs_imp <-ELIGIBILITYRULES(d_acs_imp, earnings, weeks, annhours, minsize, bene_level) 
+    # OUTPUT: ACS file with program eligibility and base program take-up indicators
     
     # Option to extend leaves under leave program 
     if (extend_leaves==1) {
+      # INPUT: ACS file
       d_acs_imp <- EXTENDLEAVES(d_fmla, d_acs_imp, wait_period, ext_base_effect, 
                                 extend_prob, extend_days, extend_prop, fmla_protect)  
+      # OUTPUT: ACS file with leaves extended based on user specifications
     }
-    
+    # INPUT: ACS file
     d_acs_imp <-UPTAKE(d_acs_imp, own_uptake, matdis_uptake, bond_uptake, illparent_uptake, 
                        illspouse_uptake, illchild_uptake, full_particip_needer, wait_period,
                        maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
                        maxlen_total,maxlen_DI,maxlen_PFL)
+    # OUTPUT: ACS file with modified leave program variables based on user-specified program restrictions
+    #         on maximum participation length and user-specified take-up rate assumptions
   }
   
   if (leaveprogram==FALSE) {
@@ -272,25 +284,33 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   }
   
   # benefit parameter functions
-  
+  # INPUT: ACS file
   d_acs_imp <- BENEFITS(d_acs_imp, leaveprogram)
+  # OUTPUT: ACS file with base employer pay and program benefit calculation variables
   
   if (leaveprogram==TRUE & bene_effect==1) {
+    # INPUT: ACS file
     d_acs_imp <- BENEFITEFFECT(d_acs_imp)
+    # OUTPUT: ACS file with leave taking variables modified to account for behavioral cost of applying to program
   }
   
   if (leaveprogram==TRUE & topoff_rate>0) {
+    # INPUT: ACS file
     d_acs_imp <- TOPOFF(d_acs_imp,topoff_rate, topoff_minlength)
+    # OUTPUT: ACS file with leave taking variables modified to account for employer top-off effects
   }
   
   if (leaveprogram==TRUE & dependent_allow>0) {
+    # INPUT: ACS file
     d_acs_imp <- DEPENDENTALLOWANCE(d_acs_imp,dependent_allow)
+    # OUTPUT: ACS file with program benefit amounts including a user-specified weekly dependent allowance
   }
   
   # final clean up 
+  # INPUT: ACS file
   d_acs_imp <- CLEANUP(d_acs_imp, week_bene_cap,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
                        maxlen_total,maxlen_DI,maxlen_PFL)
-  
+  # OUTPUT: ACS file with finalized leave taking, program uptake, and benefits received variables
   return(d_acs_imp)
 }
 

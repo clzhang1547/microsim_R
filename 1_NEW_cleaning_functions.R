@@ -116,6 +116,10 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
                                                 white = ifelse(raceth == 5,1,0),
                                                 other = ifelse(raceth == 6,1,0),
                                                 hisp = ifelse(raceth == 7,1,0))
+  # id var
+  d_fmla$id <- as.numeric(rownames(d_fmla))
+  d_fmla <- d_fmla[order(d_fmla$id),]
+  
   # --------------------------------------------------------------------
   # leave characteristics
   # --------------------------------------------------------------------
@@ -546,8 +550,8 @@ clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
            "WAGP","WKHP","PWGTP","FER", "WKW","COW","ESR")]
 
   # id variable
-  d$empid <- as.numeric(rownames(d))
-  d <- d[order(d$empid),]
+  d$id <- as.numeric(rownames(d))
+  d <- d[order(d$id),]
   
   # adjust weightfactor if user specifies
   if (weightfactor!=1) {
