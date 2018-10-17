@@ -1,3 +1,4 @@
+#rm(list=ls())
 cat("\014")  
 this.dir <- dirname(parent.frame(2)$ofile)
 setwd(this.dir)
@@ -15,6 +16,7 @@ source("0_NEW_master_execution_function.R")
 #                   useCSV=TRUE,
 #                   saveDF=TRUE)
 
+# subsequent times, can run from saved r data frames to save time.
 d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   acs_person_csv="ss16pri_short.csv",
                   acs_house_csv="ss16hri_short.csv",

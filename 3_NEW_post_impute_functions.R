@@ -623,7 +623,7 @@ DEPENDENTALLOWANCE <- function(d,dependent_allow) {
 # ============================ #
 # Final variable alterations and consistency checks
 
-CLEANUP <- function(d, week_bene_cap,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
+CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
                     maxlen_total,maxlen_DI,maxlen_PFL) {
   
   # Check leave length participation caps again 
@@ -635,6 +635,13 @@ CLEANUP <- function(d, week_bene_cap,maxlen_own, maxlen_matdis, maxlen_bond, max
   # cap benefit payments at program's weekly benefit cap
   d <- d %>% mutate(actual_benefits= ifelse(actual_benefits>ceiling(week_bene_cap*particip_length)/5,
                                             ceiling(week_bene_cap*particip_length)/5, actual_benefits))
+  
+  # cap benefits payments as a function of mean weekly wage in the population
+  if (!is.null(week_bene_cap_prop)) {
+    cap <- mean(d$WAGP/d$weeks_worked)*week_bene_cap_prop
+    d <- d %>% mutate(actual_benefits= ifelse(actual_benefits>ceiling(cap*particip_length)/5,
+                                              ceiling(cap*particip_length)/5, actual_benefits))
+  }
   
   # make sure those with particip_length 0 are also particip 0
   d <- d %>% mutate(particip= ifelse(particip_length==0,0, particip))

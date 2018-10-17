@@ -46,6 +46,7 @@
 # maxlen_PFL - setting to cap total combined paid family leaves (all other types). default is off
 # maxlen_total - setting to cap all leaves. default is off
 # week_bene_cap - max weekly benefits that can be collected
+# week_bene_cap_prop - option to cap max weekly benefits that can be collected at a proportion of the mean weekly wage
 # fmla_protect - Indicates whether or not leaves that are extended in the presence of a program that
 #     originally were less than 12 weeks in length are constrained to be no longer than
 #     12 weeks in the presence of the program
@@ -59,7 +60,10 @@
 # random_seed - set random seed if user wishes analyses to be replicable 
 
 # useCSV, saveDF are programmer convenience functions. should be removed from final product ( just a few adjustments in cleaning step below)
-
+# useCSV - TRUE -> load raw CSv files for ACS/CPS/FMLA and run cleaning functions
+#          FALSE -> load clean R files for ACS/CPS/FMLA and skip cleaning functions 
+# SaveDF - TRUE -> Save cleaned files for ACS/CPS/FMLA as R data frames
+#          FALSE -> Don't save cleaned files
 
 policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, useCSV=TRUE, saveDF=FALSE,
                               leaveprogram=FALSE, GOVERNMENT=FALSE, SELFEMP=FALSE, 
@@ -73,7 +77,8 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               clone_factor=0, ext_base_effect=TRUE, extend_prob=0, extend_days=0, extend_prop=1,
                               maxlen_own =60, maxlen_matdis =60, maxlen_bond =60, maxlen_illparent =60, maxlen_illspouse =60, maxlen_illchild =60,
                               maxlen_PFL=maxlen_illparent+maxlen_illspouse+maxlen_illchild+maxlen_bond, maxlen_DI=maxlen_bond+maxlen_matdis,
-                              maxlen_total=maxlen_DI+maxlen_PFL, week_bene_cap=1000000, fmla_protect=TRUE, earnings=NULL, weeks= NULL, annhours=NULL,
+                              maxlen_total=maxlen_DI+maxlen_PFL, week_bene_cap=1000000, week_bene_cap_prop=NULL,
+                              fmla_protect=TRUE, earnings=NULL, weeks= NULL, annhours=NULL,
                               minsize= NULL, weightfactor=1, random_seed=NULL) {
   
   # load required libraries
@@ -103,13 +108,13 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     
     # save_csv is a programmer's convenience argument, should be removed from final product
     
-    d_fmla <- read.csv(fmla_csv)
+    d_fmla <- read.csv(paste0("./csv_inputs/", fmla_csv))
     #INPUT: Raw file for FMLA survey
     d_fmla <- clean_fmla(d_fmla, save_csv=FALSE)
     #OUTPUT: clean FMLA dataframe 
 
-    d_acs_person <- read.csv(acs_person_csv)
-    d_acs_house <-  read.csv(acs_house_csv)
+    d_acs_person <- read.csv(paste0("./csv_inputs/",acs_person_csv))
+    d_acs_house <-  read.csv(paste0("./csv_inputs/",acs_house_csv))
     #INPUT: Raw files for ACS person, household levels  
     d_acs <- clean_acs(d_acs_person, d_acs_house, save_csv=FALSE, weightfactor,GOVERNMENT,SELFEMP)
     #OUTPUT: clean ACS dataframe of employed individuals with user options to: 
@@ -117,7 +122,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
       # b) include government workers
       # c) include self employed workers
     
-    d_cps <- read.csv(cps_csv)
+    d_cps <- read.csv(paste0("./csv_inputs/",cps_csv))
     #INPUT: Raw file for CPS 
     d_cps <- clean_cps(d_cps)
     #OUTPUT: Cleaned CPS dataframe
@@ -135,17 +140,17 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   else { 
     # Programmer convenience: load files from a dataframe
     # should be removed from final product
-     d_fmla <- readRDS("d_fmla.rds")
-     d_acs <- readRDS("d_acs.rds")
-     d_cps <- readRDS("d_cps.rds")
+     d_fmla <- readRDS(paste0("./R_dataframes/","d_fmla.rds"))
+     d_acs <- readRDS(paste0("./R_dataframes/","d_acs.rds"))
+     d_cps <- readRDS(paste0("./R_dataframes/","d_cps.rds"))
   }
   
   if (saveDF==TRUE) {
     # Programmer convenience: save cleaned sets to dataframe
     # should be removed from final product
-    saveRDS(d_fmla,file="d_fmla.rds")
-    saveRDS(d_acs,file="d_acs.rds")
-    saveRDS(d_cps,file="d_cps.rds")
+    saveRDS(d_fmla,file=paste0("./R_dataframes/","d_fmla.rds"))
+    saveRDS(d_acs,file=paste0("./R_dataframes/","d_acs.rds"))
+    saveRDS(d_cps,file=paste0("./R_dataframes/","d_cps.rds"))
     return()
   }
   
@@ -305,10 +310,9 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     d_acs_imp <- DEPENDENTALLOWANCE(d_acs_imp,dependent_allow)
     # OUTPUT: ACS file with program benefit amounts including a user-specified weekly dependent allowance
   }
-  
   # final clean up 
   # INPUT: ACS file
-  d_acs_imp <- CLEANUP(d_acs_imp, week_bene_cap,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
+  d_acs_imp <- CLEANUP(d_acs_imp, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
                        maxlen_total,maxlen_DI,maxlen_PFL)
   # OUTPUT: ACS file with finalized leave taking, program uptake, and benefits received variables
   return(d_acs_imp)

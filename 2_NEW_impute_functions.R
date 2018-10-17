@@ -625,8 +625,8 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
 
   # Save ACS and FMLA Dataframes at this point to document format that alternative imputation methods 
   # will need to expect
-  saveRDS(d_fmla, file="d_fmla_impute_input.rds")
-  saveRDS(d_acs, file="d_acs_impute_input.rds")
+  saveRDS(d_fmla, file="./R_dataframes/d_fmla_impute_input.rds") # Remove from final version
+  saveRDS(d_acs, file="./R_dataframes/d_acs_impute_input.rds") # Remove from final version
   # KNN1 imputation method
   if (impute_method=="KNN1") {
     # separate KNN1 calls for each unique conditional doesn't work because of differing missing values
@@ -645,7 +645,8 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
       d_acs <- merge(i, d_acs, by="id",all.y=TRUE)
     }  
   }
-  saveRDS(d_acs, file="d_acs_impute_output.rds")
+  
+  saveRDS(d_acs, file="./R_dataframes/d_acs_impute_output.rds") # Remove from final version
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # alternate imputation methods will go here
