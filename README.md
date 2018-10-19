@@ -34,7 +34,7 @@ KNN1_testing.R: code verifying KNN1_scratch function matches results of canned '
 ## R dataframes
 d_acs.rds, d_cps.rds, d_fmla.rds: cleaned ACS, CPS, FMLA dataframes to quicken runtimes for programmer convenience while testing
 
-d_fmla_impute_input.rds, d_acs_impute_input.rds, d_acs_impute_output.rds: Dataframes saved just before and after FMLA -> ACS imputation to use as expected input and output data sets for alternative imputation functions.
+d_fmla_impute_input.rds, d_acs_impute_input.rds, d_acs_impute_output.rds: Dataframes saved just before and after FMLA -> ACS imputation to use as expected input and output data sets for reference when building alternative imputation functions.
 
 ## Output
 sample_output.csv: sample CSV of model output; an ACS data set with leave taking variables added
