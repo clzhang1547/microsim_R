@@ -26,15 +26,12 @@
 # xvars - xvars for imputation method to use. Default for Nearest Neighbor, K=1
 # leaveprogram - FALSE for absence of any leave program, TRUE for leave program with default assumptions
 #                assumptions are modified by below parameters
-# uptake - uptake calculation approach
 # bene_level - proportion of pay received as part of program participation
 # bene_effect - 1 to affix behavioral cost to applying to program
 #               0 to disable
 # topoff_rate, min_length - percent of employer engagement in top-off substitution of paid leave with program benefits
 # dependent_allow - weekly dependent allowance for those with children
 # full_particip_needer - whether or not leave needers always take up benefits. default is yes (1)
-# needer_uptake - whether (0) leave needers follow specified uptake parameters of the general population, or (1) if 
-#                 leave needers always take up benefits in the presence of the program.
 # [type]_uptake - user-supplied benefit uptake rate for a given type of leave if . 1 is full uptake
 # waiting_period - how long in working days must leave takers wait to claim leave benefits
 # clone_factor - number of clones to create. Number is proportion of original ACS sample to clone. i.e. .1 clones 10% of the original sample.
@@ -58,6 +55,8 @@
 # minsize - Number of employees working at their employer
 # weightfactor - Multiply ACS weights by a certain number
 # random_seed - set random seed if user wishes analyses to be replicable 
+# sample_prop - sample proportion from ACS, and adjust weightfactor accordingly
+# output - filename to save final data set as csv in output folder. If not specified, no csv is saved.
 
 # useCSV, saveDF are programmer convenience functions. should be removed from final product ( just a few adjustments in cleaning step below)
 # useCSV - TRUE -> load raw CSv files for ACS/CPS/FMLA and run cleaning functions
@@ -71,15 +70,15 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               xvars=c("widowed", "divorced", "separated", "nevermarried", "female", 
                                          "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
                                          "white", "asian", "hisp","nochildren"),
-                              bene_level=1, topoff_rate=0, topoff_minlength=0, 
-                              bene_effect=0, dependent_allow=0, full_particip_needer=1, own_uptake=1, matdis_uptake=1, bond_uptake=1, illparent_uptake=1, 
+                              bene_level=1, topoff_rate=0, topoff_minlength=0, sample_prop=NULL,
+                              bene_effect=FALSE, dependent_allow=0, full_particip_needer=FALSE, own_uptake=1, matdis_uptake=1, bond_uptake=1, illparent_uptake=1, 
                               illspouse_uptake=1, illchild_uptake=1, extend_leaves=0,wait_period=0,
                               clone_factor=0, ext_base_effect=TRUE, extend_prob=0, extend_days=0, extend_prop=1,
                               maxlen_own =60, maxlen_matdis =60, maxlen_bond =60, maxlen_illparent =60, maxlen_illspouse =60, maxlen_illchild =60,
                               maxlen_PFL=maxlen_illparent+maxlen_illspouse+maxlen_illchild+maxlen_bond, maxlen_DI=maxlen_bond+maxlen_matdis,
                               maxlen_total=maxlen_DI+maxlen_PFL, week_bene_cap=1000000, week_bene_cap_prop=NULL,
                               fmla_protect=TRUE, earnings=NULL, weeks= NULL, annhours=NULL,
-                              minsize= NULL, weightfactor=1, random_seed=NULL) {
+                              minsize= NULL, weightfactor=1, output=NULL, random_seed=NULL) {
   
   # load required libraries
   library('MASS')
@@ -142,6 +141,11 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     # should be removed from final product
      d_fmla <- readRDS(paste0("./R_dataframes/","d_fmla.rds"))
      d_acs <- readRDS(paste0("./R_dataframes/","d_acs.rds"))
+     if (!is.null(sample_prop)) {
+       samp=round(nrow(d_acs)*sample_prop,digits=0)
+       d_acs$PWGTP=d_acs$PWGTP/sample_prop
+       d_acs <- sample_n(d_acs, samp)
+     }
      d_cps <- readRDS(paste0("./R_dataframes/","d_cps.rds"))
   }
   
@@ -188,6 +192,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   if (leaveprogram==TRUE) {
     d_fmla <-LEAVEPROGRAM(d_fmla)
   }
+  
   # OUTPUT: FMLA data with adjusted take_leave columns to include 1s
   #         for those that would have taken leave if they could afford it
   
@@ -221,7 +226,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   d_fmla <- impute_leave_length(d_fmla_orig, d_fmla, conditional, test_conditional, fmla=TRUE)
   # OUTPUT: modified FMLA data with lengths for leaves added as part of
   #         program participation or intra FMLA imputation
-
+  
   #-----FMLA to ACS Imputation-----
   
   # default is just simple nearest neighbor, K=1 
@@ -293,7 +298,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   d_acs_imp <- BENEFITS(d_acs_imp, leaveprogram)
   # OUTPUT: ACS file with base employer pay and program benefit calculation variables
   
-  if (leaveprogram==TRUE & bene_effect==1) {
+  if (leaveprogram==TRUE & bene_effect==TRUE) {
     # INPUT: ACS file
     d_acs_imp <- BENEFITEFFECT(d_acs_imp)
     # OUTPUT: ACS file with leave taking variables modified to account for behavioral cost of applying to program
@@ -315,6 +320,11 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   d_acs_imp <- CLEANUP(d_acs_imp, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
                        maxlen_total,maxlen_DI,maxlen_PFL)
   # OUTPUT: ACS file with finalized leave taking, program uptake, and benefits received variables
+  
+  if (!is.null(output)) {
+    write.csv(d, file=paste0('./output/',output))
+  }
+  
   return(d_acs_imp)
 }
 

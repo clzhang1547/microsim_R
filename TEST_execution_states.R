@@ -23,7 +23,7 @@ d_ri <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   leaveprogram=TRUE,
                   bene_level=.6,
                   ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
-                  bene_effect=1, full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0, week_bene_cap_prop=.85,
+                  bene_effect=TRUE, full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0, week_bene_cap_prop=.85,
                   own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, illparent_uptake=.25,
                   illspouse_uptake=.25, illchild_uptake=.25, dependent_allow = 10,
                   maxlen_PFL= 20, maxlen_DI=150, maxlen_own =150, maxlen_matdis =150, maxlen_bond =20, maxlen_illparent=20, 
@@ -66,7 +66,7 @@ d_ca <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                           leaveprogram=TRUE,
                           bene_level=.55,
                           ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
-                          bene_effect=1, full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0, week_bene_cap=1216,
+                          bene_effect=TRUE, full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0, week_bene_cap=1216,
                           own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, illparent_uptake=.25,
                           illspouse_uptake=.25, illchild_uptake=.25,
                           maxlen_own =260, maxlen_matdis =260, maxlen_bond =30, maxlen_illparent =30, 
@@ -108,7 +108,7 @@ d_nj <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                           leaveprogram=TRUE,
                           bene_level=.66,
                           ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
-                          bene_effect=1, full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0, week_bene_cap=637,
+                          bene_effect=TRUE, full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0, week_bene_cap=637,
                           own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, illparent_uptake=.25,
                           illspouse_uptake=.25, illchild_uptake=.25,
                           maxlen_own =130, maxlen_matdis =130, maxlen_bond =30, maxlen_illparent =30, 
@@ -137,3 +137,35 @@ for (i in leave_types) {
 end_time <- Sys.time()
 print(end_time - start_time)
 
+
+#----------------------------
+# Massachusetts
+#----------------------------
+
+policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
+                  acs_person_csv="ss15pma.csv",
+                  acs_house_csv="ss15hma.csv",
+                  cps_csv="CPS2014extract.csv",
+                  useCSV=TRUE,
+                  saveDF=TRUE)
+
+
+# Logit test for comparison with Chris
+# Parameters not tailored to Mass yet
+d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
+                       acs_person_csv="ss16pma_short.csv",
+                       acs_house_csv="ss16ma_short.csv",
+                       cps_csv="CPS2014extract.csv",
+                       useCSV=FALSE,
+                       saveDF=FALSE,
+                       leaveprogram=TRUE,
+                       bene_level=.55,
+                       impute_method="logit",
+                       GOVERNMENT=TRUE,
+                       ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
+                       bene_effect=TRUE, full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0, week_bene_cap=1216,
+                       own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, illparent_uptake=.25,
+                       illspouse_uptake=.25, illchild_uptake=.25,
+                       maxlen_own =260, maxlen_matdis =260, maxlen_bond =30, maxlen_illparent =30, 
+                       maxlen_PFL= 30, maxlen_DI=260, maxlen_total=260,
+                       maxlen_illspouse =30, maxlen_illchild =30,earnings=300, random_seed=123)

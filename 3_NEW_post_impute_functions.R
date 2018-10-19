@@ -358,7 +358,7 @@ UPTAKE <- function(d, own_uptake, matdis_uptake, bond_uptake, illparent_uptake,
                                            rand<get(uptake_val) & particip==1 & get(paste(take_var)) == 1,1,0))
     
     # Option for if leave needers always take up benefits when they receive more than their employer pays in leave
-    if (full_particip_needer==1) {
+    if (full_particip_needer==TRUE) {
       d <- d %>% mutate(particip_length=ifelse(wait_period<get(paste('length_',i,sep="")) &
                                                  rand>=get(uptake_val) & particip==1 & get(paste(take_var))== 1 & unaffordable==1, 
                                                particip_length+get(paste('length_',i,sep=""))-wait_period, particip_length))

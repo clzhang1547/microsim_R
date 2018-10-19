@@ -139,7 +139,7 @@ impute_intra_fmla <- function(d_fmla) {
     #        variables to impute 
     
     impute <- mapply(runLogitImpute, estimate=nest_estimate, tcond= test_conditional, var_name=vars_name, 
-                     MoreArgs=list(d_in=d_fmla,multi_var=TRUE), SIMPLIFY = FALSE)
+                     MoreArgs=list(d_in=d_fmla,multi_var=TRUE, intra_leave=TRUE), SIMPLIFY = FALSE)
     #OUTPUT: probabilities of each FMLA individual taking/needing a type of leave
 
     # Run leave type imputation on multi-leave takers based on probability
@@ -151,7 +151,6 @@ impute_intra_fmla <- function(d_fmla) {
   
   # first run imputes take_* variables 
   temp_func("take")
-  
   # ---------------------------------------------------------------------------------------------------------
   # C. Types of Leave Needed for multiple leave needers
   # ---------------------------------------------------------------------------------------------------------
@@ -176,7 +175,7 @@ runLogitEstimate <- function(d_in,x,y,z){
 # ============================ #
 # function to take logit estimation model, and impute values to test data set
 
-runLogitImpute <- function(d_in, estimate, var_name, tcond, multi_var=FALSE) {
+runLogitImpute <- function(d_in, estimate, var_name, tcond, multi_var=FALSE,intra_leave=FALSE) {
 
   # calculate a column of probabilities of variable based on individual characteristics
   var_prob= paste0(var_name,"_prob")
@@ -187,6 +186,7 @@ runLogitImpute <- function(d_in, estimate, var_name, tcond, multi_var=FALSE) {
   }
   model=estimate
   d[var_prob]=estimate['(Intercept)']
+  
   for (dem in names(model)) {
     if (dem !='(Intercept)') { 
       d[is.na(d[,dem]),dem]=0
@@ -200,12 +200,14 @@ runLogitImpute <- function(d_in, estimate, var_name, tcond, multi_var=FALSE) {
   # on the number of leaves to be imputed and the leave types already taken/needed.
   # so for those instances, return_var will be FALSE, and we'll then run the 
   # "add_leave_types" function below.
-  if (multi_var==FALSE) {
+  if (intra_leave==FALSE) {
     d['rand']=runif(nrow(d))
     d[var_name] <- with(d, ifelse(rand>get(var_prob),0,1))
     keep <- c(var_name, "id")
     d <- d[ , (names(d) %in% keep)]
-    d <- merge( d, d_in, by="id",all.y=TRUE)
+    if (multi_var==FALSE) {
+      d <- merge( d, d_in, by="id",all.y=TRUE)  
+    }
     return(d)
   }
   else {
@@ -226,6 +228,7 @@ add_leave_types <- function(d, lname, impute) {
     # set missing probability = 0
     d[is.na(d[colnames(i[2])]), colnames(i[2])] <- 0
   }  
+  
   d_orig <- d 
   # randomly select leave types for those taking multiple leaves from those types not already taken
   vars_name=c()
@@ -272,7 +275,7 @@ LEAVEPROGRAM <- function(d) {
     take_var=paste("take_",i,sep="")
     need_var=paste("need_",i,sep="")
     # I wonder if we should create another dummy variable of whether this person didn't take a leave pre-program
-    d[,take_var] <- ifelse(d[,"unaffordable"]==1 & d[,need_var]==1,1,d[,take_var])
+    d[,take_var] <- ifelse(d[,"unaffordable"]==1 & d[,need_var]==1 & !is.na(d[,'unaffordable']) & !is.na(d[,need_var]),1,d[,take_var])
   }
   
   return(d)
@@ -285,7 +288,7 @@ LEAVEPROGRAM <- function(d) {
 # function to impute leave length once leave taking behavior has been modified
 impute_leave_length <- function(d_impute, d_in, conditional, test_cond, fmla) { 
   
-  classes <- c(own = "length_own",
+  specif <- c(own = "length_own",
                illspouse = "length_illspouse",
                illchild = "length_illchild",
                illparent = "length_illparent",
@@ -299,16 +302,23 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond, fmla) {
   #        ACS or FMLA observations requiring imputed leave length (test data), FMLA observations constituting the
   #        sample from which to impute length from (training data), and specification whether or not
   #        test data is FMLA data or not (operations differ for ACS length imputation)
-  predict <- mapply(runRandDraw, y=classes, z=conditional,test_cond=test_cond,
+  predict <- mapply(runRandDraw, y=specif, z=conditional,test_cond=test_cond,
                     MoreArgs = list(d_train=d_impute, d_test=d_in, lname="length_", fmla=fmla),
                     SIMPLIFY = FALSE)
   # Outputs: data sets of imputed leave length values for ACS or FMLA observations requiring them
   
   # merge imputed values with fmla data
+  count=0
   for (i in predict) {
-    d_in <- merge(i, d_in, by="id",all.y=TRUE)
+    count=count+1
+    if (!is.null(i)) {
+      d_in <- merge(i, d_in, by="id",all.y=TRUE)  
+    }
+    else {
+      d_in[paste0('length_',leave_types[count])] <- NA
+    }
   }  
-
+  
   vars_name=c()
   for (i in leave_types) {
     vars_name= c(vars_name, paste("length",i, sep="_"))
@@ -358,28 +368,30 @@ runRandDraw <- function(d_train,d_test,y,z,test_cond,lname, fmla=TRUE) {
   # filter out test cases
   test <- d_test %>% filter_(test_cond)
   
-  # random draw
-  if (!y %in% colnames(test)) {
-    test[y]=NA
+  if (nrow(test)!=0) {
+    # random draw
+    if (!y %in% colnames(test)) {
+      test[y]=NA
+    }
+    
+    A <- function(x) train[sample(nrow(train), 1), y]
+    test[y] <- apply(test[y],1, A)
+    
+    # For the FMLA intra imputation runs of this, we also know long_length.
+    # replace with minimum of (median length of training set & long_length) if draw is greater the length of longest leave
+    # should think some more about what to do here, I think there's a better way.
+    # Also, raw leave length distribution looks weird on closer inspection in FMLA data
+    
+    if (fmla==TRUE) {
+      test$median <- median(train[,y])
+      test[y] <- with(test, ifelse(!is.na(long_length) & get(y)>long_length,pmin(median, long_length),get(y)))
+    }
+    
+    
+    est_df <- test[c("id",y)]
+    
+    return(est_df) 
   }
-  
-  A <- function(x) train[sample(nrow(train), 1), y]
-  test[y] <- apply(test[y],1, A)
-  
-  # For the FMLA intra imputation runs of this, we also know long_length.
-  # replace with minimum of (median length of training set & long_length) if draw is greater the length of longest leave
-  # should think some more about what to do here, I think there's a better way.
-  # Also, raw leave length distribution looks weird on closer inspection in FMLA data
-  
-  if (fmla==TRUE) {
-    test$median <- median(train[,y])
-    test[y] <- with(test, ifelse(!is.na(long_length) & get(y)>long_length,pmin(median, long_length),get(y)))
-  }
-  
-  
-  est_df <- test[c("id",y)]
-  return(est_df) 
-
 }
 
 # ============================ #
@@ -603,37 +615,40 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
   #     whether leave was unaffordable or not
   # ---------------------------------------------------------------------------------------------------------
 
-  # classes of leave
-  classes <- c(own = "take_own", 
-               illspouse = "take_illspouse",
-               illchild = "take_illchild",
-               illparent = "take_illparent",
-               matdis = "take_matdis",
-               bond = "take_bond",
-               prop_pay = "prop_pay",
-               unaffordable= "unaffordable")
-  # H: I forget the logic for these conditionals. We should discuss.
-  # L: Sure
-  conditional <- c(own = "TRUE",
-                   illspouse = "nevermarried == 0 & divorced == 0",
-                   illchild = "TRUE",
-                   illparent = "TRUE",
-                   matdis = "female == 1 & nochildren == 0",
-                   bond = "nochildren == 0",
-                   prop_pay="TRUE",
-                   unaffordable="TRUE")
-
-  # Save ACS and FMLA Dataframes at this point to document format that alternative imputation methods 
-  # will need to expect
-  saveRDS(d_fmla, file="./R_dataframes/d_fmla_impute_input.rds") # Remove from final version
-  saveRDS(d_acs, file="./R_dataframes/d_acs_impute_input.rds") # Remove from final version
   # KNN1 imputation method
   if (impute_method=="KNN1") {
+    
+    # Save ACS and FMLA Dataframes at this point to document format that alternative imputation methods 
+    # will need to expect
+    saveRDS(d_fmla, file="./R_dataframes/d_fmla_impute_input.rds") # Remove from final version
+    saveRDS(d_acs, file="./R_dataframes/d_acs_impute_input.rds") # Remove from final version
+    
+    # classes of leave
+    specif <- c(own = "take_own", 
+                illspouse = "take_illspouse",
+                illchild = "take_illchild",
+                illparent = "take_illparent",
+                matdis = "take_matdis",
+                bond = "take_bond",
+                prop_pay = "prop_pay",
+                unaffordable= "unaffordable")
+    # H: I forget the logic for these conditionals. We should discuss.
+    # L: Sure
+    conditional <- c(own = "TRUE",
+                     illspouse = "nevermarried == 0 & divorced == 0",
+                     illchild = "TRUE",
+                     illparent = "TRUE",
+                     matdis = "female == 1 & nochildren == 0",
+                     bond = "nochildren == 0",
+                     prop_pay="TRUE",
+                     unaffordable="TRUE")
+
+    
     # separate KNN1 calls for each unique conditional doesn't work because of differing missing values
     
     # INPUTS: variable to be imputed, conditionals to filter training and test data on, FMLA data (training), and
     #         ACS data (test), id variable, and dependent variables to use in imputation
-    impute <- mapply(KNN1_scratch, imp_var=classes,train_cond=conditional, test_cond=conditional,
+    impute <- mapply(KNN1_scratch, imp_var=specif,train_cond=conditional, test_cond=conditional,
                         MoreArgs=list(d_train=d_fmla,d_test=d_acs,xvars=xvars), SIMPLIFY = FALSE)
     # OUTPUTS: A data set for each leave taking/other variables requiring imputation. Each data set contains id for ACS
     #          observations in the leave variable universe, and a dummy indicating whether that ACS individual
@@ -644,9 +659,15 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
     for (i in impute) {
       d_acs <- merge(i, d_acs, by="id",all.y=TRUE)
     }  
+    saveRDS(d_acs, file="./R_dataframes/d_acs_impute_output.rds") # Remove from final version
   }
   
-  saveRDS(d_acs, file="./R_dataframes/d_acs_impute_output.rds") # Remove from final version
+  # Logit estimation of leave taking to compare with Chris' results in Python
+  if (impute_method=="logit") {
+    
+    d_acs <- logit_leave_method(d_acs, d_fmla)
+  
+  }
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # alternate imputation methods will go here
@@ -658,11 +679,12 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
   }
   
 
+  
   # ---------------------------------------------------------------------------------------------------------
   # B. Impute Days of Leave Taken
   # ---------------------------------------------------------------------------------------------------------
   #Days of leave taken - currently takes length from most recent leave only
-  classes <- c(own = "length_own",
+  specif <- c(own = "length_own",
                illspouse = "length_illspouse",
                illchild = "length_illchild",
                illparent = "length_illparent",
@@ -831,3 +853,130 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_cond, test_cond, xvars)
 # 5B. impute_leave_length
 # ============================ #
 # see function 3
+
+
+# ============================ #
+# 5C. logit_method_leave
+# ============================ #
+  # logit imputation of leave characteristics
+  # following Chris' specification in python
+
+logit_leave_method <- function(d_acs, d_fmla) {
+  # population mean imputation for missing xvars in logit regression
+  imp_mean= c('age', 'agesq', 'male', 'wkhours', 'ltHS', 'BA', 'GradSch', 
+              'empgov_fed', 'empgov_st', 'empgov_loc',
+              'lnfaminc', 'black', 'asian', 'hisp', 'other',
+              'ndep_kid', 'ndep_old', 'nevermarried', 'partner',
+              'widowed', 'divorced', 'separated')
+  
+  for (i in imp_mean) {
+    d_fmla[is.na(d_fmla[,i]), i] <- 0
+  }
+  
+  for (i in imp_mean) {
+    d_acs[is.na(d_acs[,i]), i] <- mean(d_acs[,i], na.rm = TRUE)
+  }
+  
+  # classes of leave
+  specif <- c(own = "take_own ~ age + agesq + male +  wkhours + ltHS +
+              BA + GradSch + empgov_fed + empgov_st + empgov_loc +
+              lnfaminc + black + asian + hisp + other +
+              ndep_kid + ndep_old + nevermarried + partner +
+              widowed + divorced + separated", 
+              illspouse = "take_illspouse ~ age + agesq + male +  wkhours + ltHS +
+              BA + GradSch + empgov_fed + empgov_st + empgov_loc + 
+              lnfaminc + black + asian + hisp + other + 
+              ndep_kid + ndep_old + nevermarried + partner +
+              widowed + divorced + separated",
+              illchild = "take_illchild ~ age + agesq + male +  wkhours + ltHS +
+              BA + GradSch + empgov_fed + empgov_st + empgov_loc +
+              lnfaminc + black + asian + hisp + other +
+              ndep_kid + ndep_old + nevermarried + partner +
+              widowed + divorced + separated",
+              illparent = "take_illparent ~ age + agesq + male +  wkhours + ltHS +
+              BA + GradSch + empgov_fed + empgov_st + empgov_loc +
+              lnfaminc + black + asian + hisp + other +
+              ndep_kid + ndep_old + nevermarried + partner +
+              widowed + divorced + separated",
+              matdis = "take_matdis ~ age + agesq + male +  wkhours + ltHS +
+              BA + GradSch + empgov_fed + empgov_st + empgov_loc +
+              lnfaminc + black + asian + hisp + other +
+              ndep_kid + ndep_old + nevermarried + partner +
+              widowed + divorced + separated",
+              bond = "take_bond ~ age + agesq + male +  wkhours + ltHS + 
+              BA + GradSch + empgov_fed + empgov_st + empgov_loc +
+              lnfaminc + black + asian + hisp + other +
+              ndep_kid + ndep_old + nevermarried + partner +
+              widowed + divorced + separated",
+              unaffordable= "unaffordable ~ age + agesq + male +  wkhours + ltHS +
+                                    BA + GradSch + empgov_fed + empgov_st + empgov_loc +
+                                    lnfaminc + black + asian + hisp + other +
+                                    ndep_kid + ndep_old + nevermarried + partner +
+                                    widowed + divorced + separated")
+  
+  conditional <- c(own = "TRUE",
+                   illspouse = "nevermarried == 0 & divorced == 0",
+                   illchild = "TRUE",
+                   illparent = "TRUE",
+                   matdis = "female == 1 & nochildren == 0",
+                   bond = "nochildren == 0",
+                   unaffordable="TRUE")
+  
+  # weights
+  weight <- c(own = "~ fixed_weight",
+              illspouse = "~ fixed_weight",
+              illchild = "~ fixed_weight",
+              illparent = "~ weight",
+              matdis = "~ fixed_weight",
+              bond = "~ fixed_weight",
+              unaffordable = "~ fixed_weight")
+  
+  
+  
+  estimates <- mapply(runLogitEstimate, x = specif, y = conditional, z = weight, 
+                      MoreArgs=list(d_in=d_fmla), 
+                      SIMPLIFY = FALSE)
+  
+  # nest estimates for mapply to work properly
+  nest_estimate <- lapply(seq(1,length(estimates)), function(y) {estimates[y]} )
+  
+  # Generate probabilities of each leave type based on logit estimates
+  vars_name=c()
+  for (i in leave_types) {
+    vars_name= c(vars_name, paste("take",i, sep="_"))
+  }
+  vars_name= c(vars_name, "unaffordable")
+  impute <- mapply(runLogitImpute, estimate=nest_estimate, tcond= conditional, var_name=vars_name, 
+                   MoreArgs=list(d_in=d_acs,multi_var=TRUE), SIMPLIFY = FALSE)
+  
+  # merge imputed values into single data set
+  for (i in impute) {
+    d_acs <- merge(i, d_acs, by="id",all.y=TRUE)
+    # set missing probability = 0
+    d_acs[is.na(d_acs[colnames(i[2])]), colnames(i[2])] <- 0
+  } 
+  
+  # Do an ordinal logit imputation for prop_pay
+  specif = "factor(prop_pay) ~ age + agesq + male +  wkhours + ltHS +
+                    BA + GradSch + empgov_fed + empgov_st + empgov_loc +
+                    lnfaminc + black + asian + hisp + other +
+                    ndep_kid + ndep_old + nevermarried + partner +
+                    widowed + divorced + separated"
+  conditional = "TRUE"
+  weight= "~ fixed_weight"
+  estimate <- runOrdinalEstimate(d_fmla, specif,conditional,weight)
+  d_acs <- runOrdinalImpute(d_acs, estimate,"prop_pay","TRUE")
+  
+  # replace factor levels with prop_pay proportions
+  d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 1, 0, prop_pay))
+  d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 2, .125, prop_pay))
+  d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 3, .375, prop_pay))
+  d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 4, .5, prop_pay))
+  d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 5, .625, prop_pay))
+  d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 6, .875, prop_pay))
+  d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 7, 1, prop_pay))
+
+  
+  return(d_acs)
+}
+  

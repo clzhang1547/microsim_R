@@ -54,6 +54,16 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   # hourly worker
   d_fmla <- d_fmla %>% mutate(hourly = ifelse(E9_1 == 2,1,0))
   
+  # Hours worked per week at midpoint of category
+  d_fmla <- d_fmla %>% mutate(wkhours = ifelse(E15_CAT_REV == 1,4,0))
+  d_fmla <- d_fmla %>% mutate(wkhours = ifelse(E15_CAT_REV == 2,11.5,wkhours))
+  d_fmla <- d_fmla %>% mutate(wkhours = ifelse(E15_CAT_REV == 3,17,wkhours))
+  d_fmla <- d_fmla %>% mutate(wkhours = ifelse(E15_CAT_REV == 4,21.5,wkhours))
+  d_fmla <- d_fmla %>% mutate(wkhours = ifelse(E15_CAT_REV == 5,26.5,wkhours))
+  d_fmla <- d_fmla %>% mutate(wkhours = ifelse(E15_CAT_REV == 6,32,wkhours))
+  d_fmla <- d_fmla %>% mutate(wkhours = ifelse(E15_CAT_REV == 7,37.5,wkhours))
+  d_fmla <- d_fmla %>% mutate(wkhours = ifelse(E15_CAT_REV == 8,45,wkhours))
+  
   # union member
   d_fmla <- d_fmla %>% mutate(union = ifelse(D3 == 1,1,0))
   
@@ -70,11 +80,18 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(age = ifelse(AGE_CAT == 10,70,age))
   d_fmla <- d_fmla %>% mutate(agesq = age^2)
   
-  
+  # government employment
+  d_fmla <- d_fmla %>% mutate(empgov_fed = ifelse(D2 == 1,1,0))
+  d_fmla <- d_fmla %>% mutate(empgov_st = ifelse(D2 == 2,1,0))
+  d_fmla <- d_fmla %>% mutate(empgov_loc = ifelse(D2 == 3,1,0))
   
   # sex
   d_fmla <- d_fmla %>% mutate(male = ifelse(GENDER_CAT == 1,1,0),
                                                 female = ifelse(GENDER_CAT == 2,1,0))
+  
+  # dependents
+  d_fmla <- d_fmla %>% mutate(ndep_kid = D7_CAT)
+  d_fmla <- d_fmla %>% mutate(ndep_old = D8_CAT)
   
   # no children
   d_fmla <- d_fmla %>% mutate(nochildren = ifelse(D7_CAT==0,1,0))  
@@ -495,6 +512,11 @@ clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
                     occ_9 = ifelse(OCC>=7700 & OCC<=8965,1,0),
                     occ_10 = ifelse(OCC>=9000 & OCC<=9750,1,0))
   
+  #Class of Government workers
+  d <- d %>% mutate(empgov_fed = ifelse(COW == 5,1,0))
+  d <- d %>% mutate(empgov_st = ifelse(COW == 4,1,0))
+  d <- d %>% mutate(empgov_loc = ifelse(COW == 3,1,0))
+  
   # industry
   d <- d %>% mutate(  ind_1 = ifelse(INDP>=170 & INDP<=290 ,1,0),
                       ind_2 = ifelse(INDP>=370 & INDP<=490 ,1,0),
@@ -547,7 +569,8 @@ clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
            "GradSch", "black", "white", "asian", "other", "hisp", "OCC", "occ_1", "occ_2", "occ_3", 
            "occ_4", "occ_5", "occ_6", "occ_7", "occ_8", "occ_9", "occ_10", "ind_1", "ind_2", "ind_3", "ind_4", 
            "ind_5", "ind_6", "ind_7", "ind_8", "ind_9", "ind_10", "ind_11", "ind_12", "ind_13", "weeks_worked",
-           "WAGP","WKHP","PWGTP","FER", "WKW","COW","ESR")]
+           "WAGP","WKHP","PWGTP","FER", "WKW","COW","ESR","partner","ndep_kid","ndep_old",'empgov_fed','empgov_st',
+           'wkhours', 'empgov_loc')]
 
   # id variable
   d$id <- as.numeric(rownames(d))
@@ -562,6 +585,9 @@ clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
   # Remove ineligible workers
   # -------------------------- #
   
+  # Restrict to ages 18 and over 
+  d <- d %>% filter(age>=18)
+  
   # Restrict dataset to civilian employed workers
   d <- d %>% filter(ESR==1|ESR==2)
   
@@ -571,11 +597,11 @@ clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
   
   #
   if (GOVERNMENT==FALSE) {
-    d <- d %>% filter(COW!=3 & COW!=4)  
+    d <- d %>% filter(COW!=3 & COW!=4 & COW!=5)  
   }
   
   if (SELFEMP==FALSE) {
-    d <- d %>% filter(COW!=5 & COW!=6 & COW!=7)  
+    d <- d %>% filter(COW!=6 & COW!=7)  
   }
   
   # -------------------------- #
