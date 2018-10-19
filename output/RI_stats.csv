@@ -1,0 +1,11 @@
+Variable,Mean,Standard Error of Mean,Confidence Interval,Population Total,Pop Total Standard Error,Pop Total CI
+Eligible for leave program,83%,0.0029,"[ 0.8374567 , 0.8262371 ]",339876,2168,"[ 335625.822 , 344126.178 ]"
+Participated in leave program,11%,0.0027,"[ 0.1119496 , 0.1015312 ]",43612,1115,"[ 41427.432 , 45796.568 ]"
+Length of Participation in Days,4.68,0.1536,"[ 4.978493 , 4.37638 ]",1911107,63654,"[ 1786344.512 , 2035869.488 ]"
+Took & got benefits for own leave,6%,0.0019,"[ 0.06842107 , 0.06082168 ]",26403,808,"[ 24819.884 , 27986.116 ]"
+Took & got benefits for illspouse leave,1%,0.0006,"[ 0.009819862 , 0.007283276 ]",3494,265,"[ 2974.457 , 4013.543 ]"
+Took & got benefits for illchild leave,1%,0.0007,"[ 0.008703637 , 0.006005844 ]",3005,282,"[ 2452.571 , 3557.429 ]"
+Took & got benefits for illparent leave,2%,0.0012,"[ 0.02157097 , 0.01672263 ]",7823,509,"[ 6825.168 , 8820.832 ]"
+Took & got benefits for matdis leave,1%,0.0008,"[ 0.01034573 , 0.007344812 ]",3614,313,"[ 2999.914 , 4228.086 ]"
+Took & got benefits for bond leave,1%,0.0007,"[ 0.008895087 , 0.00595635 ]",3034,308,"[ 2431.175 , 3636.825 ]"
+Amount of Benefits Received ($), 424.00 , 16.42 ," [ 456.1881 , 391.8154 ] "," 173,238,643.48 "," 6,809,953.92 ","[ 159891133.810 , 186586153.157 ]"
