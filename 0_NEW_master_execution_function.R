@@ -57,6 +57,7 @@
 # random_seed - set random seed if user wishes analyses to be replicable 
 # sample_prop - sample proportion from ACS, and adjust weightfactor accordingly
 # output - filename to save final data set as csv in output folder. If not specified, no csv is saved.
+# output_stats - summary statistics output specification. if not specified, no CSV saved
 
 # useCSV, saveDF are programmer convenience functions. should be removed from final product ( just a few adjustments in cleaning step below)
 # useCSV - TRUE -> load raw CSv files for ACS/CPS/FMLA and run cleaning functions
@@ -78,7 +79,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               maxlen_PFL=maxlen_illparent+maxlen_illspouse+maxlen_illchild+maxlen_bond, maxlen_DI=maxlen_bond+maxlen_matdis,
                               maxlen_total=maxlen_DI+maxlen_PFL, week_bene_cap=1000000, week_bene_cap_prop=NULL,
                               fmla_protect=TRUE, earnings=NULL, weeks= NULL, annhours=NULL,
-                              minsize= NULL, weightfactor=1, output=NULL, random_seed=NULL) {
+                              minsize= NULL, weightfactor=1, output=NULL, output_stats=NULL, random_seed=NULL) {
   
   # load required libraries
   library('MASS')
@@ -97,6 +98,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   source("1_NEW_cleaning_functions.R")
   source("2_NEW_impute_functions.R")
   source("3_NEW_post_impute_functions.R")
+  source("4_output_analysis_functions.R")
   
   #========================================
   # 1. Cleaning 
@@ -120,6 +122,11 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
       # a) multiple weights by a specified amount
       # b) include government workers
       # c) include self employed workers
+    if (!is.null(sample_prop)) {
+      samp=round(nrow(d_acs)*sample_prop,digits=0)
+      d_acs$PWGTP=d_acs$PWGTP/sample_prop
+      d_acs <- sample_n(d_acs, samp)
+    }
     
     d_cps <- read.csv(paste0("./csv_inputs/",cps_csv))
     #INPUT: Raw file for CPS 
@@ -286,6 +293,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   }
   
   if (leaveprogram==FALSE) {
+    d_acs_imp["eligworker"] <- 0
     d_acs_imp["benefit_prop"] <- 0
     d_acs_imp["particip"] <- 0
     d_acs_imp["particip_length"] <- 0
@@ -322,7 +330,11 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # OUTPUT: ACS file with finalized leave taking, program uptake, and benefits received variables
   
   if (!is.null(output)) {
-    write.csv(d, file=paste0('./output/',output))
+    write.csv(d_acs_imp, file=paste0('./output/',output,'.csv'))
+  }
+  
+  if (output_stats=='standard') {
+    standard_summary_stats(d_acs_imp,output) 
   }
   
   return(d_acs_imp)

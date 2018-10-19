@@ -27,27 +27,7 @@ d_ri <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, illparent_uptake=.25,
                   illspouse_uptake=.25, illchild_uptake=.25, dependent_allow = 10,
                   maxlen_PFL= 20, maxlen_DI=150, maxlen_own =150, maxlen_matdis =150, maxlen_bond =20, maxlen_illparent=20, 
-                  maxlen_illspouse =20, maxlen_illchild =20, maxlen_total=150, earnings=11520, random_seed=123)
-
-
-# diagnostic tables
-table(d_ri$eligworker)
-table(d_ri$particip)
-table(d_ri$particip_length)
-table(d_ri$actual_benefits)
-table(d_ri$exhausted_by, useNA = 'always')
-table(d_ri$bene_effect_flg, useNA = 'always')
-
-# Program Cost
-#total
-print(format(sum(d_ri$actual_benefits*d_ri$PWGTP),digits=0,big.mark=",",scientific=FALSE))
-
-#by leave type
-for (i in leave_types) {
-  bene_var=paste("bene_",i,sep="")
-  print(paste(i,"leave benefit costs"))
-  print(format(sum(d_ri[,bene_var]*d_ri$PWGTP),digits=0,big.mark=",",scientific=FALSE))
-}
+                  maxlen_illspouse =20, maxlen_illchild =20, maxlen_total=150, earnings=11520,output="RI", output_stats='standard',  random_seed=123)
 
 
 end_time <- Sys.time()

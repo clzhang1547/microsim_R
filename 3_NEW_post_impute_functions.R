@@ -648,12 +648,19 @@ CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdi
   
   # calculate leave specific benefits
   for (i in leave_types) {
-    len_var=paste("length_",i,sep="")
+    plen_var=paste("plen_",i,sep="")
     ben_var=paste("bene_",i,sep="")  
-    d[ben_var] <- with(d, actual_benefits*(get(len_var)/total_length))
+    d[ben_var] <- with(d, actual_benefits*(get(plen_var)/particip_length))
     d[ben_var] <- with(d, ifelse(is.na(get(ben_var)),0,get(ben_var)))
+    
+    # create ptake_* vars
+    # dummies for those that took a given type of leave, and collected non-zero benefits for it
+    take_var=paste("take_",i,sep="")
+    ptake_var=paste("ptake_",i,sep="")
+    d[ptake_var] <- with(d, ifelse(get(ben_var)>0 & get(take_var)>0,1,0))
   }
-  
+
+    
   return(d)
 }
 

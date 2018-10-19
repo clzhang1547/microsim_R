@@ -36,6 +36,7 @@
 # 5. impute_fmla_to_acs
     # 5a. KNN1_scratch
     # 5b. impute_leave_length
+    # 5c. logit_leave_method
 
 # ============================ #
 # 1. impute_intra_fmla
@@ -68,7 +69,7 @@ impute_intra_fmla <- function(d_fmla) {
   d_fmla['leave_count']=d_fmla['num_leaves_take']- rowSums(d_fmla[,vars_name], na.rm=TRUE)
   d_fmla['long_flag']=0
   for (i in leave_types) {
-    take_var=paste("take_",i,sep="") # An alternative way for this is to use paste0
+    take_var=paste("take_",i,sep="")
     len_var=paste("length_",i,sep="")
     long_var=paste("long_",i,sep="")
     longlen_var=paste("longlength_",i,sep="")
@@ -664,9 +665,7 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
   
   # Logit estimation of leave taking to compare with Chris' results in Python
   if (impute_method=="logit") {
-    
     d_acs <- logit_leave_method(d_acs, d_fmla)
-  
   }
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -856,7 +855,7 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_cond, test_cond, xvars)
 
 
 # ============================ #
-# 5C. logit_method_leave
+# 5C. logit_leave_method
 # ============================ #
   # logit imputation of leave characteristics
   # following Chris' specification in python
@@ -936,7 +935,6 @@ logit_leave_method <- function(d_acs, d_fmla) {
   estimates <- mapply(runLogitEstimate, x = specif, y = conditional, z = weight, 
                       MoreArgs=list(d_in=d_fmla), 
                       SIMPLIFY = FALSE)
-  
   # nest estimates for mapply to work properly
   nest_estimate <- lapply(seq(1,length(estimates)), function(y) {estimates[y]} )
   
@@ -975,8 +973,7 @@ logit_leave_method <- function(d_acs, d_fmla) {
   d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 5, .625, prop_pay))
   d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 6, .875, prop_pay))
   d_acs <- d_acs %>% mutate(prop_pay = ifelse(prop_pay == 7, 1, prop_pay))
-
   
   return(d_acs)
 }
-  
+

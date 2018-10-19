@@ -29,7 +29,7 @@ d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   saveDF=FALSE,
                   leaveprogram=TRUE,
                   bene_level=.55,
-                  impute_method="logit",
+                  impute_method="KNN1",
                   GOVERNMENT=TRUE,
                   #sample_prop=.95,
                   ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
@@ -38,13 +38,6 @@ d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   illspouse_uptake=.25, illchild_uptake=.25,
                   maxlen_own =260, maxlen_matdis =260, maxlen_bond =30, maxlen_illparent =30, 
                   maxlen_PFL= 30, maxlen_DI=260, maxlen_total=260,
-                  maxlen_illspouse =30, maxlen_illchild =30,earnings=300, random_seed=123)
-
-# diagnostic tables
-table(d$eligworker)
-table(d$particip)
-table(d$particip_length)
-table(d$actual_benefits)
-table(d$exhausted_by, useNA = 'always')
-table(d$bene_effect_flg, useNA = 'always')
+                  maxlen_illspouse =30, maxlen_illchild =30,earnings=300, 
+                  output_stats='standard', random_seed=123)
 
