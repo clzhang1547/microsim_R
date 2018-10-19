@@ -15,7 +15,10 @@ Purpose of each file of R code:
 
 "TEST_execution.R" : sample execution of Master policy simulation function
 
-## Inputs
+"TEST_execution_states.R" : execution of Master policy simulation function on full state ACS data sets for NJ, CA, and RI. 
+ Note that raw ACS files for this are not on github yet, still haven't figured out how to get Git Large File Service to work yet in order to get these up here.
+
+## csv Inputs
 ss16hri_short.csv: sample ACS household-level file
 
 ss16pri_short.csv: sample ACS person-level file
@@ -25,10 +28,10 @@ fmla_2012_employee_restrict_puf.csv: FMLA 2012 raw file
 CPS2014extract.csv: March CPS 2014 extract file
   TODO: Add cleaning code to allow this file to be replaced with other CPS files more easily
 
-
 ## Other files
 KNN1_testing.R: code verifying KNN1_scratch function matches results of canned 'neighbr' package
 
+# R dataframes
 d_acs.rds, d_cps.rds, d_fmla.rds: cleaned ACS, CPS, FMLA dataframes to quicken runtimes for programmer convenience while testing
 
 d_fmla_impute_input.rds, d_acs_impute_input.rds, d_acs_impute_output.rds: Dataframes saved just before and after FMLA -> ACS imputation to use as expected input and output data sets for alternative imputation functions.
