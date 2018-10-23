@@ -337,6 +337,10 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     standard_summary_stats(d_acs_imp,output) 
   }
   
+  if (output_stats=='state_compar') {
+    state_compar_stats(d_acs_imp, output)
+  }
+  
   return(d_acs_imp)
 }
 

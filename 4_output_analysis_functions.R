@@ -57,7 +57,7 @@ replicate_weights_SE <- function(d, var) {
 }
 
 # ============================ #
-# standard_summary_stats
+# 2. standard_summary_stats
 # ============================ #
 # function to produce some standard summary statistics of relevant leave taking and other vars in csv format
 standard_summary_stats <-function(d, output) {
@@ -95,6 +95,53 @@ standard_summary_stats <-function(d, output) {
   total_CI=unname(unlist(total_CI))
   
   var_names=c('Eligible for leave program', 'Participated in leave program', 'Length of Participation in Days', ptake_names,'Amount of Benefits Received ($)')
+  d_out=data.frame(var_names,mean,SE,CI,total, total_SE, total_CI)
+  colnames(d_out) <- c("Variable","Mean", "Standard Error of Mean", "Confidence Interval","Population Total", "Pop Total Standard Error", "Pop Total CI")
+  write.csv(d_out,file=paste0('./output/',output,"_stats.csv"), row.names= FALSE)
+}
+
+# ============================ #
+# 2. state_compar_stats
+# ============================ #
+
+# function to produce summary statistics to compare with actual state of relevant leave taking and other vars in csv format
+state_compar_stats <-function(d, output) {
+  
+  ptake_vars=c()
+  ptake_names=c()
+  for (i in leave_types) {
+    ptake_vars=c(ptake_vars,paste("ptake_",i,sep=""))
+    ptake_names=c(ptake_names, paste("Participated for",i,'leave'))
+  }
+  
+  # define columns of csv
+  vars=c(ptake_vars, 'ptake_DI','ptake_PFL', 'particip','bene_DI','bene_PFL', 'actual_benefits')
+  mean=c()
+  SE=c()
+  CI=c()
+  total=c()
+  total_SE=c()
+  total_CI=c()
+  for (i in vars) {
+    temp=replicate_weights_SE(d, i)
+    mean=c(mean, temp[2])
+    SE=c(SE, temp[3])
+    CI=c(CI, temp[4])
+    total=c(total, temp[7])
+    total_SE=c(total_SE, temp[8])
+    total_CI=c(total_CI, temp[11])
+  }
+  
+  mean=unname(unlist(mean))
+  SE=unname(unlist(SE))
+  CI=unname(unlist(CI))
+  total=unname(unlist(total))
+  total_SE=unname(unlist(total_SE))
+  total_CI=unname(unlist(total_CI))
+  
+  var_names=c(ptake_names, 'Participated for  for own illness or maternal disability leave', 'Participated for ill relative or child bonding leave', 'Participated for any reason',
+              'Benefits Received ($), for own illness or maternal disability leave','Benefits Received ($), for for ill relative or child bonding leave',
+              'Benefits Received ($), total')
   d_out=data.frame(var_names,mean,SE,CI,total, total_SE, total_CI)
   colnames(d_out) <- c("Variable","Mean", "Standard Error of Mean", "Confidence Interval","Population Total", "Pop Total Standard Error", "Pop Total CI")
   write.csv(d_out,file=paste0('./output/',output,"_stats.csv"), row.names= FALSE)

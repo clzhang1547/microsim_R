@@ -38,6 +38,6 @@ d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   illspouse_uptake=.25, illchild_uptake=.25,
                   maxlen_own =260, maxlen_matdis =260, maxlen_bond =30, maxlen_illparent =30, 
                   maxlen_PFL= 30, maxlen_DI=260, maxlen_total=260,
-                  maxlen_illspouse =30, maxlen_illchild =30,earnings=300, 
-                  output_stats='standard', random_seed=123)
+                  maxlen_illspouse =30, maxlen_illchild =30,earnings=300, output='states',
+                  output_stats='state_compar', random_seed=123)
 

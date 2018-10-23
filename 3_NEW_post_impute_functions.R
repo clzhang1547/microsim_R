@@ -447,9 +447,10 @@ check_caps <- function(d,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparen
     d['plen_illspouse']=round(d[,'plen_illspouse']*d[,'reduce'])
     d['plen_illparent']=round(d[,'plen_illparent']*d[,'reduce'])
     
-    # recalculate DI/PFL lengths
+    # recalculate DI/PFL/total lengths
     d <- d %>% mutate(DI_plen=plen_matdis+plen_own)
     d <- d %>% mutate(PFL_plen=plen_bond+plen_illparent+plen_illchild+plen_illspouse)
+    d <- d %>% mutate(particip_length=DI_plen+ PFL_plen)
   }
   return(d)
 }
@@ -646,18 +647,44 @@ CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdi
   # make sure those with particip_length 0 are also particip 0
   d <- d %>% mutate(particip= ifelse(particip_length==0,0, particip))
   
+  
   # calculate leave specific benefits
+  d['ptake_PFL'] <-0
+  d['ptake_DI'] <-0
+  d['bene_DI'] <- 0
+  d['bene_PFL'] <- 0
+  
   for (i in leave_types) {
     plen_var=paste("plen_",i,sep="")
     ben_var=paste("bene_",i,sep="")  
     d[ben_var] <- with(d, actual_benefits*(get(plen_var)/particip_length))
     d[ben_var] <- with(d, ifelse(is.na(get(ben_var)),0,get(ben_var)))
     
+    # benefits for PFL, DI leave types
+
+    
+    if (i=='own'|i=='matdis') {
+      d['bene_DI'] <- with(d, bene_DI+ get(ben_var))
+    }
+    
+    if (i=='bond'|i=='illspouse'|i=='illparent'|i=='illchild') {
+      d['bene_PFL'] <- with(d, bene_PFL + get(ben_var))
+    }
+    
     # create ptake_* vars
     # dummies for those that took a given type of leave, and collected non-zero benefits for it
     take_var=paste("take_",i,sep="")
     ptake_var=paste("ptake_",i,sep="")
     d[ptake_var] <- with(d, ifelse(get(ben_var)>0 & get(take_var)>0,1,0))
+    
+    # dummies for PFL, DI leave types
+    if (i=='own'|i=='matdis') {
+      d['ptake_DI'] <- with(d, ifelse(get(ben_var)>0 & get(take_var)>0,1,ptake_DI))  
+    }
+    
+    if (i=='bond'|i=='illspouse'|i=='illparent'|i=='illchild') {
+      d['ptake_PFL'] <- with(d, ifelse(get(ben_var)>0 & get(take_var)>0,1,ptake_PFL))  
+    }
   }
 
     
@@ -668,3 +695,4 @@ CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdi
 # 10A. check_caps
 # ============================ #
 # see function 5A.
+# calculate leave specific benefits
