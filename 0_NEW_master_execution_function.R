@@ -66,20 +66,20 @@
 #          FALSE -> Don't save cleaned files
 
 policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, useCSV=TRUE, saveDF=FALSE,
-                              leaveprogram=FALSE, GOVERNMENT=FALSE, SELFEMP=FALSE, 
+                              leaveprogram=TRUE, GOVERNMENT=FALSE, SELFEMP=FALSE, 
                               impute_method="KNN1",
                               xvars=c("widowed", "divorced", "separated", "nevermarried", "female", 
                                          "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
                                          "white", "asian", "hisp","nochildren"),
-                              bene_level=1, topoff_rate=0, topoff_minlength=0, sample_prop=NULL,
-                              bene_effect=FALSE, dependent_allow=0, full_particip_needer=FALSE, own_uptake=1, matdis_uptake=1, bond_uptake=1, illparent_uptake=1, 
-                              illspouse_uptake=1, illchild_uptake=1, extend_leaves=0,wait_period=0,
+                              bene_level=1, topoff_rate=0, topoff_minlength=0, sample_prop=NULL, sample_num=NULL,
+                              bene_effect=FALSE, dependent_allow=0, full_particip_needer=FALSE, own_uptake=.25, matdis_uptake=.25, bond_uptake=.25,
+                              illparent_uptake=.25, illspouse_uptake=.25, illchild_uptake=.25, wait_period=0,
                               clone_factor=0, ext_base_effect=TRUE, extend_prob=0, extend_days=0, extend_prop=1,
                               maxlen_own =60, maxlen_matdis =60, maxlen_bond =60, maxlen_illparent =60, maxlen_illspouse =60, maxlen_illchild =60,
                               maxlen_PFL=maxlen_illparent+maxlen_illspouse+maxlen_illchild+maxlen_bond, maxlen_DI=maxlen_bond+maxlen_matdis,
-                              maxlen_total=maxlen_DI+maxlen_PFL, week_bene_cap=1000000, week_bene_cap_prop=NULL,
-                              fmla_protect=TRUE, earnings=NULL, weeks= NULL, annhours=NULL,
-                              minsize= NULL, weightfactor=1, output=NULL, output_stats=NULL, random_seed=NULL) {
+                              maxlen_total=maxlen_DI+maxlen_PFL, week_bene_cap=1000000, week_bene_min=0, week_bene_cap_prop=NULL,
+                              fmla_protect=TRUE, earnings=NULL, weeks= NULL, ann_hours=NULL,
+                              minsize= NULL, weightfactor=1, output=NULL, output_stats=NULL, random_seed=123) {
   
   # load required libraries
   library('MASS')
@@ -100,6 +100,10 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   source("3_NEW_post_impute_functions.R")
   source("4_output_analysis_functions.R")
   
+  # set random seed option
+  if (!is.null(random_seed)) {
+    set.seed(random_seed)
+  }
   #========================================
   # 1. Cleaning 
   #========================================
@@ -127,6 +131,10 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
       d_acs$PWGTP=d_acs$PWGTP/sample_prop
       d_acs <- sample_n(d_acs, samp)
     }
+    if (!is.null(sample_num)) {
+      d_acs$PWGTP=d_acs$PWGTP*(nrow(d_acs)/sample_num)
+      d_acs <- sample_n(d_acs, sample_num)
+    }
     
     d_cps <- read.csv(paste0("./csv_inputs/",cps_csv))
     #INPUT: Raw file for CPS 
@@ -153,6 +161,10 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
        d_acs$PWGTP=d_acs$PWGTP/sample_prop
        d_acs <- sample_n(d_acs, samp)
      }
+     if (!is.null(sample_num)) {
+       d_acs$PWGTP=d_acs$PWGTP*(nrow(d_acs)/sample_num)
+       d_acs <- sample_n(d_acs, sample_num)
+     }
      d_cps <- readRDS(paste0("./R_dataframes/","d_cps.rds"))
   }
   
@@ -163,11 +175,6 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     saveRDS(d_acs,file=paste0("./R_dataframes/","d_acs.rds"))
     saveRDS(d_cps,file=paste0("./R_dataframes/","d_cps.rds"))
     return()
-  }
-  
-  # set random seed option
-  if (!is.null(random_seed)) {
-    set.seed(random_seed)
   }
   
   #========================================
@@ -273,16 +280,15 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # Program eligibility and uptake functions
   if (leaveprogram==TRUE) {
     # INPUT: ACS file
-    d_acs_imp <-ELIGIBILITYRULES(d_acs_imp, earnings, weeks, annhours, minsize, bene_level) 
+    d_acs_imp <-ELIGIBILITYRULES(d_acs_imp, earnings, weeks, ann_hours, minsize, bene_level) 
     # OUTPUT: ACS file with program eligibility and base program take-up indicators
     
     # Option to extend leaves under leave program 
-    if (extend_leaves==1) {
       # INPUT: ACS file
       d_acs_imp <- EXTENDLEAVES(d_fmla, d_acs_imp, wait_period, ext_base_effect, 
                                 extend_prob, extend_days, extend_prop, fmla_protect)  
       # OUTPUT: ACS file with leaves extended based on user specifications
-    }
+
     # INPUT: ACS file
     d_acs_imp <-UPTAKE(d_acs_imp, own_uptake, matdis_uptake, bond_uptake, illparent_uptake, 
                        illspouse_uptake, illchild_uptake, full_particip_needer, wait_period,
@@ -325,9 +331,12 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   }
   # final clean up 
   # INPUT: ACS file
-  d_acs_imp <- CLEANUP(d_acs_imp, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
-                       maxlen_total,maxlen_DI,maxlen_PFL)
+  d_acs_imp <- CLEANUP(d_acs_imp, week_bene_cap,week_bene_cap_prop,week_bene_min, maxlen_own, maxlen_matdis, maxlen_bond, 
+                       maxlen_illparent, maxlen_illspouse, maxlen_illchild, maxlen_total,maxlen_DI,maxlen_PFL)
   # OUTPUT: ACS file with finalized leave taking, program uptake, and benefits received variables
+  
+  
+  # Options to output final data and summary statistics
   
   if (!is.null(output)) {
     write.csv(d_acs_imp, file=paste0('./output/',output,'.csv'))

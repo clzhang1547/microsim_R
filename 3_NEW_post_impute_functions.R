@@ -128,7 +128,7 @@ PAY_SCHEDULE <- function(d) {
 # ============================ #
 # apply user-specified eligibility criteria and set initial 
 
-ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, annhours=NULL, minsize=NULL, bene_level) {
+ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, ann_hours=NULL, minsize=NULL, bene_level) {
   
   d['eligworker']= 1
   
@@ -143,8 +143,8 @@ ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, annhours=NULL, minsiz
   }
   
   # total hours worked in past 12 months
-  if (!is.null(annhours)) {
-    d <- d %>% mutate(eligworker= ifelse(weeks_worked*WKHP>=annhours & eligworker==1, 1,0))
+  if (!is.null(ann_hours)) {
+    d <- d %>% mutate(eligworker= ifelse(weeks_worked*WKHP>=ann_hours & eligworker==1, 1,0))
   }
   
   # firm size of employer
@@ -624,7 +624,7 @@ DEPENDENTALLOWANCE <- function(d,dependent_allow) {
 # ============================ #
 # Final variable alterations and consistency checks
 
-CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
+CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,week_bene_min, maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
                     maxlen_total,maxlen_DI,maxlen_PFL) {
   
   # Check leave length participation caps again 
@@ -643,6 +643,10 @@ CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,maxlen_own, maxlen_matdi
     d <- d %>% mutate(actual_benefits= ifelse(actual_benefits>ceiling(cap*particip_length)/5,
                                               ceiling(cap*particip_length)/5, actual_benefits))
   }
+  
+  # establish minimum weekly benefits for program participants
+  d <- d %>% mutate(actual_benefits= ifelse(actual_benefits<ceiling(week_bene_min*particip_length)/5,
+                                            ceiling(week_bene_min*particip_length)/5, actual_benefits))
   
   # make sure those with particip_length 0 are also particip 0
   d <- d %>% mutate(particip= ifelse(particip_length==0,0, particip))

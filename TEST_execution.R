@@ -33,11 +33,11 @@ d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   GOVERNMENT=TRUE,
                   #sample_prop=.95,
                   ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
-                  bene_effect=TRUE, full_particip_needer=1, extend_leaves=1, wait_period=5, clone_factor=0, week_bene_cap=1216,
+                  bene_effect=TRUE, full_particip_needer=FALSE, wait_period=5, clone_factor=0, week_bene_cap=1216,
                   own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, illparent_uptake=.25,
                   illspouse_uptake=.25, illchild_uptake=.25,
                   maxlen_own =260, maxlen_matdis =260, maxlen_bond =30, maxlen_illparent =30, 
                   maxlen_PFL= 30, maxlen_DI=260, maxlen_total=260,
                   maxlen_illspouse =30, maxlen_illchild =30,earnings=300, output='states',
-                  output_stats='state_compar', random_seed=123)
+                  output_stats='state_compar', random_seed=NULL)
 
