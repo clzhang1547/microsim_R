@@ -31,6 +31,13 @@ CPS2014extract.csv: March CPS 2014 extract file
 ## Other files
 KNN1_testing.R: code verifying KNN1_scratch function matches results of canned 'neighbr' package
 
+## Documentation
+Actual Leave Data 2012-2016.xlsx: excel spreadsheet of actual leave data
+Building alt imputation methods.docx: doc describing how to code up alternative imputation methods into the model
+Parameter dictionary.xlsx: Dictionary of paramters expected by policy_simulation() master function.
+Parameters for states.xlsx: Parameters specifications for actual leave states (outdated currently)
+Preliminary Simulation results clean.docx: Preliminary simulation results (outdated currently)
+
 ## R dataframes
 d_acs.rds, d_cps.rds, d_fmla.rds: cleaned ACS, CPS, FMLA dataframes to quicken runtimes for programmer convenience while testing
 
