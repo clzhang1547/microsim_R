@@ -13,6 +13,8 @@ Purpose of each file of R code:
 
 "3_NEW_post_impute_functions.R" : define policy simulation functions
 
+"4_output_analysis_functions.R": functions for post-simulation analysis and output
+
 "TEST_execution.R" : sample execution of Master policy simulation function
 
 "TEST_execution_states.R" : execution of Master policy simulation function on full state ACS data sets for NJ, CA, and RI. 
