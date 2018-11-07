@@ -19,7 +19,7 @@ source("0_NEW_master_execution_function.R")
 #                    SELFEMP=TRUE)
 
 
-
+start_time <- Sys.time()
 # subsequent times, can run from saved r data frames to save time.
 d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   acs_person_csv="ss16pri_short.csv",
@@ -40,4 +40,5 @@ d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   maxlen_PFL= 30, maxlen_DI=260, maxlen_total=260,
                   maxlen_illspouse =30, maxlen_illchild =30,earnings=300, output='states',
                   output_stats='state_compar', random_seed=NULL)
-
+end_time <- Sys.time()
+print(end_time - start_time)
