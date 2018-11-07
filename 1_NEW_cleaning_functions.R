@@ -564,13 +564,14 @@ clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
   
   # strip to only required variables to save memory
   # use select
+  replicate_weights <- paste0('PWGTP',seq(1,80))
   d <- d[c("nochildren", "lnfaminc", "faminc", "lnearn","fem_cu6","fem_c617","fem_cu6and617","fem_nochild",
            "age", "a_age", "widowed", "divorced", "hiemp",
            "separated", "nevermarried", "male", "female", "agesq", "ltHS", "someCol", "BA", 
            "GradSch", "black", "white", "asian", "other", "hisp", "OCC", "occ_1", "occ_2", "occ_3", 
            "occ_4", "occ_5", "occ_6", "occ_7", "occ_8", "occ_9", "occ_10", "ind_1", "ind_2", "ind_3", "ind_4", 
            "ind_5", "ind_6", "ind_7", "ind_8", "ind_9", "ind_10", "ind_11", "ind_12", "ind_13", "weeks_worked",
-           "WAGP","WKHP","PWGTP","FER", "WKW","COW","ESR","partner","ndep_kid","ndep_old",'empgov_fed','empgov_st',
+           "WAGP","WKHP","PWGTP", replicate_weights,"FER", "WKW","COW","ESR","partner","ndep_kid","ndep_old",'empgov_fed','empgov_st',
            'wkhours', 'empgov_loc')]
 
   # id variable
