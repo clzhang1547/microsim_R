@@ -23,9 +23,10 @@ start_time <- Sys.time()
                             leaveprogram=TRUE,
                             bene_level=.6,
                             ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
-                            bene_effect=TRUE, wait_period=5, clone_factor=0, week_bene_cap=795,
-                            own_uptake=.75, matdis_uptake=.95, bond_uptake=.75, illparent_uptake=.1,
-                            illspouse_uptake=.2, illchild_uptake=.2, dependent_allow = 10,
+                            bene_effect=TRUE, wait_period=5, full_particip_needer=TRUE, clone_factor=0, week_bene_cap=795,
+                            dependent_allow = 10,
+                            own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, illparent_uptake=.25,
+                            illspouse_uptake=.25, illchild_uptake=.25,
                             maxlen_PFL= 20, maxlen_DI=150, maxlen_own =150, maxlen_matdis =150, maxlen_bond =20, maxlen_illparent=20, 
                             maxlen_illspouse =20, maxlen_illchild =20, maxlen_total=150, earnings=11520,output="RI",
                             output_stats='state_compar',  random_seed=NULL)
@@ -46,32 +47,15 @@ d_ca <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                           leaveprogram=TRUE,
                           bene_level=.55,
                           ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
-                          bene_effect=TRUE, wait_period=5, clone_factor=0, week_bene_cap=1216,
-                          own_uptake=.75, matdis_uptake=.95, bond_uptake=.75, illparent_uptake=.1,
-                          illspouse_uptake=.2, illchild_uptake=.2,
+                          bene_effect=TRUE, full_particip_needer=TRUE, wait_period=5, clone_factor=0, week_bene_cap=1216,
+                          dependent_allow = 10,
+                          own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, illparent_uptake=.25,
+                          illspouse_uptake=.25, illchild_uptake=.25,
                           maxlen_own =260, maxlen_matdis =260, maxlen_bond =30, maxlen_illparent =30, 
                           maxlen_PFL= 30, maxlen_DI=260, maxlen_total=260,
-                          maxlen_illspouse =30, maxlen_illchild =30,earnings=300,output="CA", output_stats='state_compar', random_seed=125)
+                          maxlen_illspouse =30, maxlen_illchild =30,earnings=300, output="CA",
+                          output_stats='state_compar',  random_seed=123)
 
-
-# diagnostic tables
-table(d_ca$eligworker)
-table(d_ca$particip)
-table(d_ca$particip_length)
-table(d_ca$actual_benefits)
-table(d_ca$exhausted_by, useNA = 'always')
-table(d_ca$bene_effect_flg, useNA = 'always')
-
-# Program Cost
-#total
-print(format(sum(d_ca$actual_benefits*d_ca$PWGTP),digits=0,big.mark=",",scientific=FALSE))
-
-#by leave type
-for (i in leave_types) {
-  bene_var=paste("bene_",i,sep="")
-  print(paste(i,"leave benefit costs"))
-  print(format(sum(d_ca[,bene_var]*d_ca$PWGTP),digits=0,big.mark=",",scientific=FALSE))
-}
 end_time <- Sys.time()
 print(end_time - start_time)
 

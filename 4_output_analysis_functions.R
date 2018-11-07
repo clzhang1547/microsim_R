@@ -40,12 +40,12 @@ replicate_weights_SE <- function(d, var) {
   SE= sqrt(4/80*sum(sapply(mget(paste0('x',seq(1,80))), function(y) {(y-x)^2})))
   CI_low=x-1.96*SE
   CI_high=x+1.96*SE
-  CI= paste("[",format(x+1.96*SE, nsmall=3),",", format(x-1.96*SE, nsmall=3),"]")
+  CI= paste("[",format(x-1.96*SE, digits=2, scientific=FALSE, big.mark=","),",", format(x+1.96*SE, digits=2, scientific=FALSE,, big.mark=","),"]")
   total=sum(d[,var]*d[,'PWGTP'], na.rm=TRUE)
   total_SE= sqrt(4/80*sum(sapply(mget(paste0('tot',seq(1,80))), function(y) {(y-tot)^2})))
   total_CI_low= total-total_SE*1.96
   total_CI_high= total+total_SE*1.96
-  total_CI=paste("[",format(total_CI_low, nsmall=3),",", format(total_CI_high, nsmall=3),"]")
+  total_CI=paste("[",format(total_CI_low, digits=2, scientific=FALSE, big.mark=","),"", format(total_CI_high, digits=2, scientific=FALSE, big.mark=","),"]")
     
   # return statistics
   stats= list(var, estimate=x, std_error=SE,confidence_int=CI,CI_low=CI_low,CI_high=CI_high, 
@@ -144,5 +144,18 @@ state_compar_stats <-function(d, output) {
               'Benefits Received ($), total')
   d_out=data.frame(var_names,mean,SE,CI,total, total_SE, total_CI)
   colnames(d_out) <- c("Variable","Mean", "Standard Error of Mean", "Confidence Interval","Population Total", "Pop Total Standard Error", "Pop Total CI")
-  write.csv(d_out,file=paste0('./output/',output,"_stats.csv"), row.names= FALSE)
+  write.csv(d_out,file=paste0('./output/',output,"_rawstats.csv"), row.names= FALSE)
+  
+  round_mean=format(mean, digits=2, scientific=FALSE, big.mark=",")
+  round_SE=format(SE,  digits=2, scientific=FALSE, big.mark=",")
+  round_CI=CI
+  round_total=format(total, digits=2, scientific=FALSE, big.mark=",")
+  round_total_SE=format(total_SE,  digits=2, scientific=FALSE, big.mark=",")
+  round_total_CI=total_CI
+  
+  d_out=data.frame(var_names,round_mean,round_SE,round_CI,round_total, round_total_SE, round_total_CI)
+  colnames(d_out) <- c("Variable","Mean", "Standard Error of Mean", "Confidence Interval","Population Total", "Pop Total Standard Error", "Pop Total CI")
+  write.csv(d_out,file=paste0('./output/',output,"_roundstats.csv"), row.names= FALSE)
+  
+  
 }
