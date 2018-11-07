@@ -40,12 +40,18 @@ replicate_weights_SE <- function(d, var) {
   SE= sqrt(4/80*sum(sapply(mget(paste0('x',seq(1,80))), function(y) {(y-x)^2})))
   CI_low=x-1.96*SE
   CI_high=x+1.96*SE
+<<<<<<< HEAD
   CI= paste("[",format(x-1.96*SE, digits=2, scientific=FALSE, big.mark=","),",", format(x+1.96*SE, digits=2, scientific=FALSE,, big.mark=","),"]")
+=======
+>>>>>>> 62c978eb8d6b9dcff6cd6a522e35c19b0fa706f4
   total=sum(d[,var]*d[,'PWGTP'], na.rm=TRUE)
   total_SE= sqrt(4/80*sum(sapply(mget(paste0('tot',seq(1,80))), function(y) {(y-tot)^2})))
   total_CI_low= total-total_SE*1.96
   total_CI_high= total+total_SE*1.96
+<<<<<<< HEAD
   total_CI=paste("[",format(total_CI_low, digits=2, scientific=FALSE, big.mark=","),"", format(total_CI_high, digits=2, scientific=FALSE, big.mark=","),"]")
+=======
+>>>>>>> 62c978eb8d6b9dcff6cd6a522e35c19b0fa706f4
     
   # return statistics
   stats= list(var, estimate=x, std_error=SE,confidence_int=CI,CI_low=CI_low,CI_high=CI_high, 

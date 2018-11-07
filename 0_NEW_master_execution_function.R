@@ -1,6 +1,6 @@
 
 # """
-# File: 0_NEW_Master_execution_function
+# File: Master_execution_function
 #
 # Master execution function that calls all other functions in order to execute the simulation
 # 
@@ -82,6 +82,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               minsize= NULL, weightfactor=1, output=NULL, output_stats=NULL, random_seed=123) {
   
   # load required libraries
+  # HK: Remove the quotes from these. And maybe put them in one line using ;
   library('MASS')
   library("plyr")
   library("dplyr")
@@ -95,6 +96,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   library('reshape2')
   
   # run files that define functions
+  # Also put in one line.
   source("1_NEW_cleaning_functions.R")
   source("2_NEW_impute_functions.R")
   source("3_NEW_post_impute_functions.R")
@@ -136,6 +138,8 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
       d_acs <- sample_n(d_acs, sample_num)
     }
     
+    # HK: Is the CPS only used to impute stuff in the FMLA? If so, we may wan to consider just including 
+    # this cleaning code within the impute_cps_to_acs() function.
     d_cps <- read.csv(paste0("./csv_inputs/",cps_csv))
     #INPUT: Raw file for CPS 
     d_cps <- clean_cps(d_cps)
@@ -152,6 +156,11 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   }
   
   else { 
+    
+  # HK: I think we should actually keep this ability in the file. In fact, it's good practice
+  # to cache things that don't need to be computed each time. We should only really run this
+  # part when the raw data files are updated right? We can formally add this in.
+    
     # Programmer convenience: load files from a dataframe
     # should be removed from final product
      d_fmla <- readRDS(paste0("./R_dataframes/","d_fmla.rds"))
@@ -211,6 +220,9 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   #         for those that would have taken leave if they could afford it
   
   # after all parameters have been accounted for, add leave lengths for take leaves added
+  # HK: Is this the part we're going to skip now? I'm going to skip reviewing it.
+  # I actually think we can literally just delete the following lines, as the rest of the code doesn't rely
+  # on the variables created here?
   # define test and train conditionals for leave length imputation
   test_conditional <- c(own = "(take_own==1 & is.na(length_own)==TRUE)", 
                         illspouse = "(take_illspouse==1 & is.na(length_illspouse)==TRUE)",
@@ -265,6 +277,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # DEPENDENTALLOWANCE: independent of other functions
   
   # OK I'm stopping here. Will review below after first revision!
+  # HK: Wow I'm stopping here again!
   # Allow for users to clone ACS individuals 
   # INPUT: ACS file
   d_acs_imp <- CLONEFACTOR(d_acs_imp, clone_factor)
