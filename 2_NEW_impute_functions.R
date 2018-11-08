@@ -787,9 +787,9 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_cond, test_cond, xvars)
   # create training data
   
   # filter dataset and keep just the variables of interest
-  train <- d_train %>% filter_(train_cond) %>%
-    filter(complete.cases(select(train, 'id', imp_var,xvars))) %>%
-    select(train, imp_var, xvars) %>%
+  train <-  d_train %>% filter(complete.cases(select(d_train, 'id', imp_var,xvars))) %>% 
+    filter_(train_cond) %>%
+    select(imp_var, xvars) %>%
     mutate(id = NULL)
   train ['nbor_id'] <- as.numeric(rownames(train))
   
