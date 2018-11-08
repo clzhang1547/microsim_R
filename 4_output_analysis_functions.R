@@ -154,6 +154,9 @@ state_compar_stats <-function(d, output) {
   round_total_SE=format(total_SE,  digits=2, scientific=FALSE, big.mark=",")
   round_total_CI=total_CI
   
+  var_names=c('Own Health', 'Ill Spouse', 'Ill Child', 'Ill Parent', 'Maternity Disability', 'Child Bonding',
+              'Own Illness or Maternal Disability', 'Ill Relative or Child Bonding', 'Any Reason',
+              'Own Illness or Maternal Disability', 'Ill Relative or Child Bonding', 'Any Reason')
   d_out=data.frame(var_names,round_mean,round_SE,round_CI,round_total, round_total_SE, round_total_CI)
   colnames(d_out) <- c("Variable","Mean", "Standard Error of Mean", "Confidence Interval","Population Total", "Pop Total Standard Error", "Pop Total CI")
   write.csv(d_out,file=paste0('./output/',output,"_roundstats.csv"), row.names= FALSE)
