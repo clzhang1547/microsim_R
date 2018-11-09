@@ -160,6 +160,4 @@ state_compar_stats <-function(d, output) {
   d_out=data.frame(var_names,round_mean,round_SE,round_CI,round_total, round_total_SE, round_total_CI)
   colnames(d_out) <- c("Variable","Mean", "Standard Error of Mean", "Confidence Interval","Population Total", "Pop Total Standard Error", "Pop Total CI")
   write.csv(d_out,file=paste0('./output/',output,"_roundstats.csv"), row.names= FALSE)
-  
-  
 }
