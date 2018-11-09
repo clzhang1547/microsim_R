@@ -27,12 +27,6 @@
 # 3. impute_leave_length
     # Subfunctions:
     # 3a. runRandDraw
-# 4. impute_cps_to_acs
-    # Subfunctions:    
-    # 4a. runLogit
-    # 4b. runLogitImpute
-    # 4c. runOrdinal
-    # 4d. runOrdinalImpute
 # 5. impute_fmla_to_acs
     # 5a. KNN1_scratch
     # 5b. impute_leave_length
@@ -64,7 +58,7 @@ impute_intra_fmla <- function(d_fmla) {
   # leave_count is tracking the number of variables to be imputed. Sorry, probably should have used a better var name
   # Num_leaves_take and the rowsums term are not consistent, hence this check beyond just the observation of
   # only longest and most recent leaves.
-  # HK: This is weird. So it's just an issue with the survey? Or are we misreading what these variables should be?
+
   d_fmla['leave_count']=d_fmla['num_leaves_take']- rowSums(d_fmla[,vars_name], na.rm=TRUE)
   d_fmla['long_flag']=0
   for (i in leave_types) {
@@ -73,19 +67,14 @@ impute_intra_fmla <- function(d_fmla) {
     long_var <- paste0("long_",i)
     longlen_var <- paste0("longlength_",i)
     
-    # HK: Luke, I can't follow the logic here. Can you explain to me?
-    # Questions:
-    # 1. Didn't everyone take their longest leave? So what does long_var indicate?
-    # 2. We're using both num_leaves_take>1 & leave_count>0 to ensure the same thing?
-    
     # flag those whose longest leave is used
-    d_fmla['long_flag'] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_take>1 & leave_count>0 & get(take_var)==0,1,long_flag))  
+    d_fmla['long_flag'] <- with(d_fmla, ifelse(get(long_var)==1 & leave_count>0 & get(take_var)==0,1,long_flag))  
     
     # alter length of 2nd leave type to match longest leave
-    d_fmla[len_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_take>1 & leave_count>0 & get(take_var)==0,get(longlen_var),get(len_var))) 
+    d_fmla[len_var] <- with(d_fmla, ifelse(get(long_var)==1 & leave_count>0 & get(take_var)==0,get(longlen_var),get(len_var))) 
     
     # alter take_var of 2nd leave type of longest leave
-    d_fmla[take_var] <- with(d_fmla, ifelse(get(long_var)==1 & num_leaves_take>1 & leave_count>0 & get(take_var)==0,1,get(take_var)))
+    d_fmla[take_var] <- with(d_fmla, ifelse(get(long_var)==1 & leave_count>0 & get(take_var)==0,1,get(take_var)))
   }
   
   # ---------------------------------------------------------------------------------------------------------
@@ -94,6 +83,8 @@ impute_intra_fmla <- function(d_fmla) {
   # creating throwaway function to easily repeat this for leave needers
   temp_func <- function(lname){
     # HK: Question - Where in here are the lengths allocated for the imputed leave types?
+    # LP: 
+    
     # specifications
     # using ACM specifications
     specif <- c(own = paste0(lname, "_own ~ age + male + lnfaminc + black + hisp + coveligd"),
@@ -125,6 +116,8 @@ impute_intra_fmla <- function(d_fmla) {
     # INPUTS: FMLA data set, Lists of regression specifications, conditional filters for training 
     #         data, and weight selection 
     # HK: Why don't we combine the runLogitEstimate and runLogit Impute Functions?
+    # LP:
+    
     estimates <- mapply(runLogitEstimate, x = specif, y = conditional, z = weight, 
                         MoreArgs=list(d_in=d_fmla), 
                         SIMPLIFY = FALSE)
@@ -141,6 +134,8 @@ impute_intra_fmla <- function(d_fmla) {
     #INPUTS: FMLA data set, lists of regression coefficients, conditional filters for training data,
     #        variables to impute 
     # HK: Luke does this produce 6 columns?
+    # LP: Yep
+    
     impute <- mapply(runLogitImpute, estimate=nest_estimate, tcond= test_conditional, var_name=vars_name, 
                      MoreArgs=list(d_in=d_fmla,multi_var=TRUE, intra_leave=TRUE), SIMPLIFY = FALSE)
     #OUTPUT: probabilities of each FMLA individual taking/needing a type of leave
@@ -188,14 +183,12 @@ runLogitImpute <- function(d_in, estimate, var_name, tcond, multi_var=FALSE,intr
   if (multi_var==TRUE) {
     estimate= estimate[[1]]
   }
-  # HK: Why do you change the name here?
-  model=estimate
   d[var_prob]=estimate['(Intercept)']
   
-  for (dem in names(model)) {
+  for (dem in names(estimate)) {
     if (dem !='(Intercept)') { 
       d[is.na(d[,dem]),dem]=0
-      d[var_prob]= d[,var_prob] + d[,dem]*model[dem]
+      d[var_prob]= d[,var_prob] + d[,dem]*estimate[dem]
     }
   }
   d[var_prob] <- with(d, exp(get(var_prob))/(1+exp(get(var_prob))))
@@ -244,6 +237,11 @@ add_leave_types <- function(d, lname, impute) {
   # function and the input probabilities.
   # Question: What does this produce? An indicator for each varname of whether that leave was taken? But
   # it seems like all individuals are taking the same number of leaves?
+  
+  # LP: Let's discuss this, not clear in my head how to change this. 
+  # Regarding question, this doesn't produce any individual variables. It is adding some 1's to "take_" vars
+  # so that ppl are taking as many different types of leaves as they said in the survey.
+  
   for (n in seq(1, max(d['leave_count']))) {
     d['rand']=runif(nrow(d))    
     
@@ -283,6 +281,8 @@ LEAVEPROGRAM <- function(d) {
     need_var=paste0("need_",i)
     # I wonder if we should create another dummy variable of whether this person didn't take a leave pre-program
     # HK: Do you mean so we can identify the "extensive margin" of people moving into "take leavers"? Sure!
+    # LP: I discuss how to handle later
+    
     d[,take_var] <- ifelse(d[,"unaffordable"]==1 & d[,need_var]==1 & !is.na(d[,'unaffordable']) & !is.na(d[,need_var]),1,d[,take_var])
   }
   
@@ -336,6 +336,7 @@ impute_leave_length <- function(d_impute, d_in, conditional, test_cond, fmla) {
   # H: hmmm I'm a bit lost here. Let's talk through it. I think a lot of this could be solved with left_join
   # L: I agree this is probably unnecessarily messy. I have a vague memory of trying left_join and something not happening the way I wanted.
   # HK: OK let's meet to figure this out
+  # LP: Noting for meeting
   for (i in vars_name) { 
     x=paste(i,".x",sep="")
     y=paste(i,".y",sep="")
@@ -388,6 +389,8 @@ runRandDraw <- function(d_train,d_test,y,z,test_cond,lname, fmla=TRUE) {
     
     # For the FMLA intra imputation runs of this, we also know long_length.
     # HK: Is this part of the function doable without the intra length stuff we've discussed?
+    # LP:
+    
     # replace with minimum of (median length of training set & long_length) if draw is greater the length of longest leave
     # should think some more about what to do here, I think there's a better way.
     # Also, raw leave length distribution looks weird on closer inspection in FMLA data
@@ -404,217 +407,9 @@ runRandDraw <- function(d_train,d_test,y,z,test_cond,lname, fmla=TRUE) {
   }
 }
 
-# ============================ #
-# 4. impute_cps_to_acs
-# ============================ #
-
-# HK: Don't think this is the right description of the function anymore right?
-# This program cleans CPS data and runs a number of logit
-# regressions to produce coefficient estimates (which are stored as csv files)
-# to be used in the simulation model.
-
-impute_cps_to_acs <- function(d_acs, d_cps){
-  
-  # ---------------------------------------------------------------------------------------------------------
-  # Run models
-  # ---------------------------------------------------------------------------------------------------------
-  
-  # logit for hourly paid regression
-  
-  specif = c(paid_hrly =  paste("paid_hrly ~ female + black + a_age + agesq + BA",
-                                "+ GradSch + occ_1 + occ_3 + occ_5 + occ_7 + occ_8",
-                                "+ occ_9 + occ_10 + ind_5 + ind_8 + ind_11 + ind_12"))
-  # HK: This means that the whole sample is used?
-  conditional = c(paid_hrly= "TRUE")
-  weight = c(paid_hrly = "~ marsupwt")
-  
-  # INPUTS: CPS (training) data set, logit regression model specification, training filter condition, weight to use
-  estimate <- runLogitEstimate(d_cps,specif,conditional,weight)
-  # OUTPUT: Logit model estimates for getting paid hourly dummy
-  
-  # INPUTS: ACS (test) data set, Logit model estimates for getting paid hourly dummy, variable to impute
-  #         test filtering condition
-  d_acs <-runLogitImpute(d_acs, estimate,"paid_hrly","TRUE") 
-  # OUTPUT: ACS data with imputed paid hourly variable
-  
-  # INPUTS/OUTPUTS are similar for remaining logits
-  
-  # HK: Is this suposed to be the number of employers? Or employees? If the former, then is the 
-  # "employer size" stuff below for the individual's primary employer?
-  # ordered logit for number of employers
-  # biggest problem with ordered logit currently is it is unweighted; can't use CPS weight without getting a non-convergence error
-  specif = c(num_employers= paste("factor(phmemprs) ~  age + agesq + asian + hisp",
-                                  "+ ltHS + someCol + BA + GradSch + lnearn",
-                                  "+ hiemp + ind_4 + ind_5 + ind_6 + ind_8",
-                                  "+ ind_13 + occ_1 + occ_6 + occ_7 + occ_9 + occ_10"))
-  conditional = c(num_employers= "TRUE")
-  weight = c(num_employers = "marsupwt")
-  
-  # INPUTS: CPS (training) data set, ordinal regression model specification, training filter condition, weight to use
-  estimate <- runOrdinalEstimate(d_cps,specif,conditional,weight)
-  # OUTPUTS: ordinal model estimates for number of employers dummy
-  
-  # INPUTS: ACS (test) data set, ordinal model estimates for getting number of employers dummy, variable to impute
-  #         test filtering condition
-  d_acs <- runOrdinalImpute(d_acs, estimate,"num_emp","TRUE")
-  # OUTPUTS: ACS data with imputed number of employers variable
-  
-  # INPUTS/OUTPUTS are similar for remaining ordinals
-  
-  # ordered logit for weeks worked - 50-52 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + agesq +  black + hisp + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==1")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps,specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_50_52","WKW==1")
-  
-  # logit for weeks worked - 48-49 weeks
-  specif = c(iweeks_worked= paste("wks_48_49 ~ age + agesq + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==2")
-  weight = c(iweeks_worked = "~ marsupwt")
-  # HK: Why is this logit and not ordinal? Because there's just one cutoff?
-  estimate <- runLogitEstimate(d_cps,specif,conditional,weight)
-  d_acs <- runLogitImpute(d_acs, estimate,"wks_48_49","WKW==2")
-  
-  # ordered logit for weeks worked - 40-47 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==3")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps,specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_40_47","WKW==3")
-  
-  # ordered logit for weeks worked - 27-39 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + fem_cu6 + fem_c617 + fem_cu6and617 + female + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==4")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps, specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_27_39","WKW==4")
-  
-  # ordered logit for weeks worked - 14-26 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + hisp + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==5")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps, specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_14_26","WKW==5")
-  
-  # ordered logit for weeks worked - <13 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + agesq + female + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==6")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps, specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_0_13","WKW==6")
-  
-  # create single weeks worked var
-  d_acs <- d_acs %>% mutate (iweeks_worked= ifelse(!is.na(wks_50_52),wks_50_52+49,0))
-  d_acs <- d_acs %>% mutate (iweeks_worked= ifelse(!is.na(wks_48_49),wks_48_49+48,iweeks_worked)) # "+48" is intentaional, this is a 0/1 var
-  d_acs <- d_acs %>% mutate (iweeks_worked= ifelse(!is.na(wks_40_47),wks_40_47+39,iweeks_worked))
-  d_acs <- d_acs %>% mutate (iweeks_worked= ifelse(!is.na(wks_27_39),wks_27_39+26,iweeks_worked))
-  d_acs <- d_acs %>% mutate (iweeks_worked= ifelse(!is.na(wks_14_26),wks_14_26+13,iweeks_worked))
-  d_acs <- d_acs %>% mutate (iweeks_worked= ifelse(!is.na(wks_0_13),wks_0_13,iweeks_worked))
-  
-  # Ordered logit employer size categories
-  specif = c(emp_size =  paste("factor(emp_size) ~ a_age + black + ltHS + someCol + BA + GradSch + lnearn",
-                               "  + hiemp + ind_1 + ind_3 + ind_5 + ind_6 + ind_8 + ind_9",
-                               "+ ind_11 + ind_12 + ind_13 + occ_1 + occ_4 + occ_5 + occ_6 + occ_7 + occ_9"))
-  conditional = c(emp_size= "TRUE")
-  weight = c(emp_size = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps, specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"emp_size","TRUE")
-  
-  
-  # then do random draw within assigned size range
-  # HK: Put these all within the one mutate function.
-  d_acs <- d_acs %>% mutate(temp_size=ifelse(emp_size==1,sample(1:9, nrow(d_acs), replace=T),0))
-  d_acs <- d_acs %>% mutate(temp_size=ifelse(emp_size==2,sample(10:49, nrow(d_acs), replace=T),temp_size))
-  d_acs <- d_acs %>% mutate(temp_size=ifelse(emp_size==3,sample(50:99, nrow(d_acs), replace=T),temp_size))
-  d_acs <- d_acs %>% mutate(temp_size=ifelse(emp_size==4,sample(100:499, nrow(d_acs), replace=T),temp_size))
-  d_acs <- d_acs %>% mutate(temp_size=ifelse(emp_size==5,sample(500:999, nrow(d_acs), replace=T),temp_size))
-  d_acs <- d_acs %>% mutate(temp_size=ifelse(emp_size==6,sample(1000:9999, nrow(d_acs), replace=T),temp_size))
-  d_acs <- d_acs %>% mutate(emp_size=temp_size)
-  d_acs <- d_acs %>% mutate(weeks_worked_cat=weeks_worked)
-  d_acs <- d_acs %>% mutate(weeks_worked=iweeks_worked)
-  
-  
-  # clean up vars
-  d_acs <- d_acs[, !(names(d_acs) %in% c('rand','temp_size','iweeks_worked',
-                                         "wks_0_13", "wks_14_26", "wks_27_39", "wks_40_47", 
-                                         "wks_48_49", "wks_50_52", "num_emp" ))]
-  return(d_acs)
-}
 
 # ============================ #
-# 4A. runLogitEstimate
-# ============================ #
-# see function 1A
-
-# ============================ #
-# 4B. runLogitImputation
-# ============================ #
-# see function 1B
-
-# ============================ #
-# 4C. runOrdinalEstimate
-# ============================ #
-# MASS implementation, polr function
-runOrdinalEstimate <- function(d_cps,x,y,z){
-  estimate <- polr(as.formula(x), data = d_cps %>% filter_(y))
-  return(estimate)
-  
-  # 
-  #   # OGLMX implementation - gives pretty non sensical results from my efforts
-  #   runOrdinal <- function(x,y,z){
-  #      results.ologit <- oglmx(as.formula(x), data = d_cps %>% filter_(y), weights=marsupwt)
-  #      pause()
-  #      return(estimate)
-  #   }
-
-}
-
-# ============================ #
-# 4D. runOrdinalImputation
-# ============================ #
-# Function to apply estimate to training data set, ordinal
-runOrdinalImpute <- function(d_in, estimate, varname, tcond) {
-  d <- d_in %>% filter_(tcond)
-  
-  # ensure there is at least one row in test data set that needs imputing
-  if (!is.null(rownames(d))) {
-    
-    # calculate score from ordinal model
-    model=estimate$coefficients
-    d['var_score']=0
-    for (dem in names(model)) {
-      if (dem !='(Intercept)') { 
-        d[is.na(d[,dem]),dem]=0
-        d[,'var_score']= d[,'var_score'] + d[,dem]*model[dem]
-      }
-    }
-    
-    # assign categorical variable based on ordinal cuts
-    cuts= estimate$zeta
-    cat_num= length(cuts)+1
-    d[varname] <- 0
-    d['rand']=runif(nrow(d))
-    for (i in seq(cat_num)) {
-      if (i!=cat_num) {
-        d <- d %>% mutate(cumprob= var_score-cuts[i])
-        d <- d %>% mutate(cumprob2= exp(cumprob)/(1+exp(cumprob)))
-        d[varname] <- with (d, ifelse(get(varname)==0 & rand>=cumprob2,i,get(varname)))
-      }
-      # HK: I think this can just be an "else"?
-      if (i==cat_num) {
-        d[varname] <- with (d, ifelse(get(varname)==0,i,get(varname)))
-      }
-    }
-    # keep just the new variable and id
-    d <- d[c(varname, "id")]
-    d_in <- merge( d, d_in, by="id",all.y=TRUE)
-  }
-  return(d_in)
-}  
-
-# ============================ #
-# 5. impute_fmla_to_acs
+# 4. impute_fmla_to_acs
 # ============================ #
 # Based on user-specified method, impute leave taking behavior in fmla to ACS
 # default is KNN1
@@ -642,6 +437,7 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
     
     # classes of leave
     # HK: Let's throw the need_leave variable in here to run LEAVEPROGRAM after the FMLA->ACS imputation
+    # LP: Rather than imputing need_ vars, can I reverse engineer the extensive margin var from 'unaffordable'
     specif <- c(own = "take_own", 
                 illspouse = "take_illspouse",
                 illchild = "take_illchild",
@@ -652,6 +448,7 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
                 unaffordable= "unaffordable")
     # H: I forget the logic for these conditionals. We should discuss.
     # L: Sure
+    # LP: Note for discussion
     conditional <- c(own = "TRUE",
                      illspouse = "nevermarried == 0 & divorced == 0",
                      illchild = "TRUE",
@@ -684,6 +481,8 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
   if (impute_method=="logit") {
     # HK: We use logit a lot. Can we just have one logit function, like KNN1_scratch that is continually used instead
     # of redefining many of the functions?
+    # LP: We should have a broader discussion about how to handle the secondary imputations needed.
+    # As is, logit estimates are used in different ways in different places, requiring different manipulations
     d_acs <- logit_leave_method(d_acs, d_fmla)
   }
   
@@ -711,12 +510,7 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
   
   #   Leave lengths are the same, except for own leaves, which are instead taken from the distribution of leave takers in FMLA survey reporting 
   #   receiving some pay from state programs
-  # H:  Why are these imputed separately? Couldn't this be done in the above? In other words, why doesn't the above also
-  #     grab the length from the nearest neighbor instead of just the take/don't take indicator?
-  # L: Would save us a KNN call. Only issue might be there are take_==1 in FMLA with missing lengths
-  #    So they are drawing from different conditionals (and this is a random draw as opposed to a KNN to match ACM's model).
-  #    This is one more place where KNN could be called.
-  
+
   if (leaveprogram==TRUE) {
     conditional <- c(own = "recStatePay == 1 &length_own>0 & is.na(length_own)==FALSE",
                      illspouse = "recStatePay == 1 &length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
@@ -767,7 +561,7 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
 }
 
 # ============================ #
-# 5A. KNN1_scratch
+# 4A. KNN1_scratch
 # ============================ #
 # Define KNN1 matching method
 
@@ -776,14 +570,13 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_cond, test_cond, xvars)
   # This returns a dataframe of length equal to acs with the employee id and a column for each leave type
   # that indicates whether or not they took the leave.
   # HK: This actually just adds one column right?
+  # LP: yeah, each call only adds one column
   
   # Data manipulation
 
   # filter fmla m_test
   # filter on conditions, select just the variables we want to impute and the variables used to calculate distance
-  # H: Use dplyr select here. ALl 3 lines could just be one line
-  # L: Great, I will do that. Update: what's the best way to do one line?
-  
+
   # create training data
   
   # filter dataset and keep just the variables of interest
@@ -868,13 +661,13 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_cond, test_cond, xvars)
 }
 
 # ============================ #
-# 5B. impute_leave_length
+# 4B. impute_leave_length
 # ============================ #
 # see function 3
 
 
 # ============================ #
-# 5C. logit_leave_method
+# 4C. logit_leave_method
 # ============================ #
   # logit imputation of leave characteristics
   # following Chris' specification in python

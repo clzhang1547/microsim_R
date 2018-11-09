@@ -82,26 +82,15 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               minsize= NULL, weightfactor=1, output=NULL, output_stats=NULL, random_seed=123) {
   
   # load required libraries
-  library('MASS')
-  library("plyr")
-  library("dplyr")
-  library("survey")
-  library("class")
-  library("dummies")
-  library("varhandle")
-  library('oglmx')
-  library('foreign')
-  library('ggplot2')
-  library('reshape2')
+  library(MASS); library(plyr); library(dplyr); library("survey"); library("class"); library("dummies"); library("varhandle"); library('oglmx')
+  library('foreign'); library('ggplot2'); library('reshape2')
   
   # clarify select function that's in both dplyr and MASS
+  # might not be necessary since MASS is loaded first?
   select <- dplyr::select
   
   # run files that define functions
-  source("1_NEW_cleaning_functions.R")
-  source("2_NEW_impute_functions.R")
-  source("3_NEW_post_impute_functions.R")
-  source("4_output_analysis_functions.R")
+  source("1_NEW_cleaning_functions.R"); source("2_NEW_impute_functions.R"); source("3_NEW_post_impute_functions.R"); source("4_output_analysis_functions.R")
   
   # set random seed option
   if (!is.null(random_seed)) {
@@ -113,8 +102,6 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   
   if (useCSV==TRUE) {
     # Load and clean csv's for FMLA, ACS, and CPS surveys
-    
-    # save_csv is a programmer's convenience argument, should be removed from final product
     
     d_fmla <- read.csv(paste0("./csv_inputs/", fmla_csv))
     #INPUT: Raw file for FMLA survey
@@ -155,8 +142,14 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   }
   
   else { 
-    # Programmer convenience: load files from a dataframe
-    # should be removed from final product
+    # load files from a dataframe
+
+    # HK: I think we should actually keep this ability in the file. In fact, it's good practice
+    # to cache things that don't need to be computed each time. We should only really run this
+    # part when the raw data files are updated right? We can formally add this in.
+    
+    # LP: Sure, that makes sense. I'll leave it in.
+    
      d_fmla <- readRDS(paste0("./R_dataframes/","d_fmla.rds"))
      d_acs <- readRDS(paste0("./R_dataframes/","d_acs.rds"))
      if (!is.null(sample_prop)) {
@@ -172,8 +165,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   }
   
   if (saveDF==TRUE) {
-    # Programmer convenience: save cleaned sets to dataframe
-    # should be removed from final product
+    #save cleaned sets to dataframe
     saveRDS(d_fmla,file=paste0("./R_dataframes/","d_fmla.rds"))
     saveRDS(d_acs,file=paste0("./R_dataframes/","d_acs.rds"))
     saveRDS(d_cps,file=paste0("./R_dataframes/","d_cps.rds"))
