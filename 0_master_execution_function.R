@@ -79,10 +79,24 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               formula_prop_cuts=NULL, formula_value_cuts=NULL, formula_bene_levels=NULL,
                               weightfactor=1, output=NULL, output_stats=NULL, random_seed=123) {
   
-  # load required libraries
-  library(extraDistr); library(stats); library(rlist); library(MASS); library(plyr); 
-  library(dplyr); library(survey); library(class); library(dummies); library(varhandle); 
-  library(oglmx); library(foreign); library(ggplot2); library(reshape2); 
+  ####################################
+  # global libraries used everywhere #
+  ####################################
+  pkgTest <- function(x)
+  {
+    if (!require(x,character.only = TRUE))
+    {
+      install.packages(x,dep=TRUE)
+      if(!require(x,character.only = TRUE)) stop("Package not found")
+    }
+    return("OK")
+  }
+  
+  global.libraries <- c('extraDistr', 'stats', 'rlist', 'MASS', 'plyr', 'dplyr', 
+                        'survey', 'class', 'dummies', 'varhandle', 'oglmx', 
+                        'foreign', 'ggplot2', 'reshape2')
+  
+  results <- sapply(as.list(global.libraries), pkgTest)
   
   # clarify select function that's in both dplyr and MASS
   # might not be necessary since MASS is loaded first?
