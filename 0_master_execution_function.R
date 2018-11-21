@@ -8,17 +8,6 @@
 # Luke
 # 
 # """
-# Test comment
-# ACM parameter functions not implemented:
-
-# PLACEOFWORK: Better implemented in the GUI filtering of ACS data 
-# CALIBRATE: Unsure of the value of this function
-# COMMENT, FILE: Made obsolete by GUI
-# MISSINGVALUE: Output command better handled by GUI
-# DETAIL: Output command better handled by GUI
-# FORMULA/FORMULA2: Seem like very narrow functions, not sure this is the best implementation of this functionality
-
-
 # ----------master function that sets policy scenario, and calls functions to alter FMLA data to match policy scenario---------------------
 # default values are all false. In this case, simulation will result be prediction of leave taking in as-is scenario of "absence of program"
 # Parameters:
@@ -26,7 +15,7 @@
 # xvars - xvars for imputation method to use. Default for Nearest Neighbor, K=1
 # leaveprogram - FALSE for absence of any leave program, TRUE for leave program with default assumptions
 #                assumptions are modified by below parameters
-# bene_level - proportion of pay received as part of program participation
+# base_bene_level - proportion of pay received as part of program participation
 # bene_effect - 1 to affix behavioral cost to applying to program
 #               0 to disable
 # topoff_rate, min_length - percent of employer engagement in top-off substitution of paid leave with program benefits
@@ -66,31 +55,42 @@
 #          FALSE -> Don't save cleaned files
 
 policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, useCSV=TRUE, saveDF=FALSE,
-                              leaveprogram=TRUE, GOVERNMENT=FALSE, SELFEMP=FALSE, 
+                              leaveprogram=TRUE, 
+                              FEDGOV=FALSE, 
+                              STATEGOV=FALSE,
+                              LOCALGOV=FALSE,
+                              SELFEMP=FALSE, 
                               impute_method="KNN1",
                               xvars=c("widowed", "divorced", "separated", "nevermarried", "female", 
                                          "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
                                          "white", "asian", "hisp","nochildren"),
-                              bene_level=1, topoff_rate=0, topoff_minlength=0, sample_prop=NULL, sample_num=NULL,
-                              bene_effect=FALSE, dependent_allow=0, full_particip_needer=FALSE, own_uptake=.25, matdis_uptake=.25, bond_uptake=.25,
+                              base_bene_level=1, topoff_rate=0, topoff_minlength=0, sample_prop=NULL, sample_num=NULL,
+                              bene_effect=FALSE, dependent_allow=0, full_particip_needer=FALSE, 
+                              own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, 
                               illparent_uptake=.25, illspouse_uptake=.25, illchild_uptake=.25, wait_period=0,
+                              own_elig_adj=1, illspouse_elig_adj=1, illchild_elig_adj=1, 
+                              illparent_elig_adj=1, matdis_elig_adj=1, bond_elig_adj=1,
                               clone_factor=0, ext_base_effect=TRUE, extend_prob=0, extend_days=0, extend_prop=1,
                               maxlen_own =60, maxlen_matdis =60, maxlen_bond =60, maxlen_illparent =60, maxlen_illspouse =60, maxlen_illchild =60,
                               maxlen_PFL=maxlen_illparent+maxlen_illspouse+maxlen_illchild+maxlen_bond, maxlen_DI=maxlen_bond+maxlen_matdis,
                               maxlen_total=maxlen_DI+maxlen_PFL, week_bene_cap=1000000, week_bene_min=0, week_bene_cap_prop=NULL,
-                              fmla_protect=TRUE, earnings=NULL, weeks= NULL, ann_hours=NULL,
-                              minsize= NULL, weightfactor=1, output=NULL, output_stats=NULL, random_seed=123) {
+                              fmla_protect=TRUE, earnings=NULL, weeks= NULL, ann_hours=NULL, minsize= NULL, 
+                              elig_rule_logic= '(earnings & weeks & ann_hours & minsize)',
+                              formula_prop_cuts=NULL, formula_value_cuts=NULL, formula_bene_levels=NULL,
+                              weightfactor=1, output=NULL, output_stats=NULL, random_seed=123) {
   
   # load required libraries
-  library(MASS); library(plyr); library(dplyr); library("survey"); library("class"); library("dummies"); library("varhandle"); library('oglmx')
-  library('foreign'); library('ggplot2'); library('reshape2')
+  library(extraDistr); library(stats); library(rlist); library(MASS); library(plyr); 
+  library(dplyr); library(survey); library(class); library(dummies); library(varhandle); 
+  library(oglmx); library(foreign); library(ggplot2); library(reshape2); 
   
   # clarify select function that's in both dplyr and MASS
   # might not be necessary since MASS is loaded first?
   select <- dplyr::select
   
   # run files that define functions
-  source("1_NEW_cleaning_functions.R"); source("2_NEW_impute_functions.R"); source("3_NEW_post_impute_functions.R"); source("4_output_analysis_functions.R")
+  source("1_cleaning_functions.R"); source("2_pre_impute_functions.R"); source("3_impute_functions.R"); 
+  source("4_post_impute_functions.R"); source("5_output_analysis_functions.R")
   
   # set random seed option
   if (!is.null(random_seed)) {
@@ -111,21 +111,9 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     d_acs_person <- read.csv(paste0("./csv_inputs/",acs_person_csv))
     d_acs_house <-  read.csv(paste0("./csv_inputs/",acs_house_csv))
     #INPUT: Raw files for ACS person, household levels  
-    d_acs <- clean_acs(d_acs_person, d_acs_house, save_csv=FALSE, weightfactor,GOVERNMENT,SELFEMP)
-    #OUTPUT: clean ACS dataframe of employed individuals with user options to: 
-      # a) multiple weights by a specified amount
-      # b) include government workers
-      # c) include self employed workers
-    if (!is.null(sample_prop)) {
-      samp=round(nrow(d_acs)*sample_prop,digits=0)
-      d_acs$PWGTP=d_acs$PWGTP/sample_prop
-      d_acs <- sample_n(d_acs, samp)
-    }
-    if (!is.null(sample_num)) {
-      d_acs$PWGTP=d_acs$PWGTP*(nrow(d_acs)/sample_num)
-      d_acs <- sample_n(d_acs, sample_num)
-    }
-    
+    d_acs <- clean_acs(d_acs_person, d_acs_house, save_csv=FALSE)
+    #OUTPUT: clean ACS dataframe of employed individuals 18 and over
+
     d_cps <- read.csv(paste0("./csv_inputs/",cps_csv))
     #INPUT: Raw file for CPS 
     d_cps <- clean_cps(d_cps)
@@ -143,24 +131,8 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   
   else { 
     # load files from a dataframe
-
-    # HK: I think we should actually keep this ability in the file. In fact, it's good practice
-    # to cache things that don't need to be computed each time. We should only really run this
-    # part when the raw data files are updated right? We can formally add this in.
-    
-    # LP: Sure, that makes sense. I'll leave it in.
-    
      d_fmla <- readRDS(paste0("./R_dataframes/","d_fmla.rds"))
      d_acs <- readRDS(paste0("./R_dataframes/","d_acs.rds"))
-     if (!is.null(sample_prop)) {
-       samp=round(nrow(d_acs)*sample_prop,digits=0)
-       d_acs$PWGTP=d_acs$PWGTP/sample_prop
-       d_acs <- sample_n(d_acs, samp)
-     }
-     if (!is.null(sample_num)) {
-       d_acs$PWGTP=d_acs$PWGTP*(nrow(d_acs)/sample_num)
-       d_acs <- sample_n(d_acs, sample_num)
-     }
      d_cps <- readRDS(paste0("./R_dataframes/","d_cps.rds"))
   }
   
@@ -171,6 +143,13 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     saveRDS(d_cps,file=paste0("./R_dataframes/","d_cps.rds"))
     return()
   }
+  
+  # sample ACS
+  # user option to sample ACS data
+  if (!is.null(sample_prop)|!is.null(sample_num)) {
+    d_acs <- sample_acs(d_acs, sample_prop=NULL, sample_num=NULL)  
+  }
+  
   
   #========================================
   # 2. Pre-imputation 
@@ -183,10 +162,8 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # Post-imputation: Alterations specific to ACS variables, or require both FMLA and ACS variables. 
   #                  Uptake behavior and benefit calculations.
   
-  
   # define global values for use across functions
   leave_types <<- c("own","illspouse","illchild","illparent","matdis","bond")
-  
   
   # preserve original copy of FMLA survey
   d_fmla_orig <- d_fmla 
@@ -201,55 +178,37 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   if (leaveprogram==TRUE) {
     d_fmla <-LEAVEPROGRAM(d_fmla)
   }
-  
   # OUTPUT: FMLA data with adjusted take_leave columns to include 1s
   #         for those that would have taken leave if they could afford it
   
-  # after all parameters have been accounted for, add leave lengths for take leaves added
-  # define test and train conditionals for leave length imputation
-  test_conditional <- c(own = "(take_own==1 & is.na(length_own)==TRUE)", 
-                        illspouse = "(take_illspouse==1 & is.na(length_illspouse)==TRUE)",
-                        illchild = "(take_illchild==1 & is.na(length_illchild)==TRUE)",
-                        illparent = "(take_illparent==1 & is.na(length_illparent)==TRUE)",
-                        matdis = "(take_matdis==1 & is.na(length_matdis)==TRUE)",
-                        bond = "(take_bond==1 & is.na(length_bond)==TRUE)")
-  if (leaveprogram==TRUE) {
-    conditional <- c(own = "recStatePay == 1 &length_own>0 & is.na(length_own)==FALSE",
-                     illspouse = "recStatePay == 1 &length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
-                     illchild = "recStatePay == 1 &length_illchild>0 & is.na(length_illchild)==FALSE",
-                     illparent = "recStatePay == 1 &length_illparent>0 & is.na(length_illparent)==FALSE",
-                     matdis = "recStatePay == 1 &length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
-                     bond = "recStatePay == 1 &length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
-  }
-  if (leaveprogram==FALSE) {
-    conditional <- c(own = "recStatePay == 0 & length_own>0 & is.na(length_own)==FALSE",
-                     illspouse = "recStatePay == 0 & length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
-                     illchild = "recStatePay == 0 & length_illchild>0 & is.na(length_illchild)==FALSE",
-                     illparent = "recStatePay == 0 & length_illparent>0 & is.na(length_illparent)==FALSE",
-                     matdis = "recStatePay == 0 & length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
-                     bond = "recStatePay == 0 & length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
-  } 
-  
-  # INPUTS: unmodified FMLA survey as the training data, modified FMLA as test data,
-  #         and conditionals for filter the two sets
-  d_fmla <- impute_leave_length(d_fmla_orig, d_fmla, conditional, test_conditional, fmla=TRUE)
-  # OUTPUT: modified FMLA data with lengths for leaves added as part of
-  #         program participation or intra FMLA imputation
   
   #-----FMLA to ACS Imputation-----
+  # filter/modify ACS data based on user specifications
+  # INPUT: ACS Data
+  d_acs <- acs_filtering(d_acs, weightfactor, FEDGOV, STATEGOV, LOCALGOV, SELFEMP)
+  # OUTPUT: Filtered ACS data
   
   # default is just simple nearest neighbor, K=1 
   # This is the big beast of getting leave behavior into the ACS.
   # INPUT: cleaned acs/fmla data, leaveprogram=TRUE/FALSE, method for imputation, dependent variables 
   #         used for imputation
-    d_acs_imp <- impute_fmla_to_acs(d_fmla,d_fmla_orig,d_acs,leaveprogram, impute_method, xvars)  
+  d_acs_imp <- impute_fmla_to_acs(d_fmla,d_fmla_orig,d_acs,leaveprogram, impute_method, xvars)  
   # OUTPUT: ACS data with imputed values for a) leave taking and needing, b) proportion of pay received from
   #         employer while on leave, and c) whether leave needed was not taken due to unaffordability 
     
-  # TODO: define expected input and outputs of alt matching method functions
-  
-  
   # -------------Post-imputation functions-----------------
+  # ---------------------------------------------------------------------------------------------------------
+  # Impute Days of Leave Taken
+  # ---------------------------------------------------------------------------------------------------------
+  # INPUTS: unmodified FMLA survey as the training data, ACS as test data,
+  #         and conditionals for filter the two sets. Using unmodified survey for leave lengths,
+  #         since modified FMLA survey contains no new information about leave lengths, and 
+  #         the intra-FMLA imputed leave lengths a random draw from that imputed data
+  #         would produced a biased 
+  #         estimate of leave length
+  d_acs_imp <- impute_leave_length(d_fmla_orig, d_acs_imp, leaveprogram, conditional, 
+                                   test_conditional)
+  # OUTPUT: ACS data with lengths for leaves imputed
   
   # function interactions description (may not be complete, just writing as they come to me):
   # ELIGIBILITYRULES: eligibility rules defined, and participation initially set 
@@ -259,7 +218,6 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # TOPOFF: TOPOFF overrides participation behavior of BENEFITEFFECT
   # DEPENDENTALLOWANCE: independent of other functions
   
-  # OK I'm stopping here. Will review below after first revision!
   # Allow for users to clone ACS individuals 
   # INPUT: ACS file
   d_acs_imp <- CLONEFACTOR(d_acs_imp, clone_factor)
@@ -275,7 +233,8 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # Program eligibility and uptake functions
   if (leaveprogram==TRUE) {
     # INPUT: ACS file
-    d_acs_imp <-ELIGIBILITYRULES(d_acs_imp, earnings, weeks, ann_hours, minsize, bene_level) 
+    d_acs_imp <-ELIGIBILITYRULES(d_acs_imp, earnings, weeks, ann_hours, minsize, base_bene_level, week_bene_min,
+                                 formula_prop_cuts, formula_value_cuts, formula_bene_levels, elig_rule_logic) 
     # OUTPUT: ACS file with program eligibility and base program take-up indicators
     
     # Option to extend leaves under leave program 
@@ -324,6 +283,13 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     d_acs_imp <- DEPENDENTALLOWANCE(d_acs_imp,dependent_allow)
     # OUTPUT: ACS file with program benefit amounts including a user-specified weekly dependent allowance
   }
+  
+  # Apply type-specific elig adjustments 
+  if (leaveprogram==TRUE) {
+    d_acs_imp <- DIFF_ELIG(d_acs_imp, own_elig_adj, illspouse_elig_adj, illchild_elig_adj,
+                           illparent_elig_adj, matdis_elig_adj, bond_elig_adj)
+  }
+  
   # final clean up 
   # INPUT: ACS file
   d_acs_imp <- CLEANUP(d_acs_imp, week_bene_cap,week_bene_cap_prop,week_bene_min, maxlen_own, maxlen_matdis, maxlen_bond, 

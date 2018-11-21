@@ -11,23 +11,184 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Table of Contents
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 1. CLONEFACTOR
-# 2. PAY_SCHEDULE
-# 3. ELIGIBILITYRULES
-# 4. EXTENDLEAVES
-    # 4A. runLogitEstimate
-# 5. UPTAKE
-    # 5A. check_caps
-# 6. BENEFITS
-# 7. BENEFITEFFECT
-# 8. TOPOFF
-# 9. DEPENDENTALLOWANCE
-# 10. CLEANUP
-    # 10a. check_caps
+# 1. impute_leave_length
+  # 1A. RunRandDraw
+# 2. CLONEFACTOR
+# 3. PAY_SCHEDULE
+# 4. ELIGIBILITYRULES
+    # 4A. FORMULA
+# 5. EXTENDLEAVES
+    # 5A. runLogitEstimate - see 3_impute_functions.R, function 1Ba
+# 6. UPTAKE
+    # 6A. check_caps
+# 7. BENEFITS
+# 8. BENEFITEFFECT
+# 9. TOPOFF
+# 10. DEPENDENTALLOWANCE
+# 11. DIFF_ELIG
+# 12. CLEANUP
+    # 12a. check_caps
 
 
 # ============================ #
-# 1. CLONEFACTOR
+# 1. impute_leave_length
+# ============================ #
+# function to impute leave length once leave taking behavior has been imputed 
+# currently impute method is hardcoded as a random draw from a specified distribution of FMLA observations
+# but this is a candidate for modual imputation
+
+impute_leave_length <- function(d_train, d_test, leaveprogram, conditional, test_cond) { 
+  #Days of leave taken - currently takes length from most recent leave only
+  yvars <- c(own = "length_own",
+              illspouse = "length_illspouse",
+              illchild = "length_illchild",
+              illparent = "length_illparent",
+              matdis = "length_matdis",
+              bond = "length_bond")
+  
+  #   Leave lengths are the same, except for own leaves, which are instead taken from the distribution of leave takers in FMLA survey reporting 
+  #   receiving some pay from state programs
+  
+  if (leaveprogram==TRUE) {
+    train_filts <- c(own = "recStatePay == 1 &length_own>0 & is.na(length_own)==FALSE",
+                     illspouse = "recStatePay == 1 &length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
+                     illchild = "recStatePay == 1 &length_illchild>0 & is.na(length_illchild)==FALSE",
+                     illparent = "recStatePay == 1 &length_illparent>0 & is.na(length_illparent)==FALSE",
+                     matdis = "recStatePay == 1 &length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
+                     bond = "recStatePay == 1 &length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
+  }
+  if (leaveprogram==FALSE) {
+    train_filts <- c(own = "recStatePay == 0 & length_own>0 & is.na(length_own)==FALSE",
+                     illspouse = "recStatePay == 0 & length_illspouse>0 & is.na(length_illspouse)==FALSE & nevermarried == 0 & divorced == 0",
+                     illchild = "recStatePay == 0 & length_illchild>0 & is.na(length_illchild)==FALSE",
+                     illparent = "recStatePay == 0 & length_illparent>0 & is.na(length_illparent)==FALSE",
+                     matdis = "recStatePay == 0 & length_matdis>0 & is.na(length_matdis)==FALSE & female == 1 & nochildren == 0",
+                     bond = "recStatePay == 0 & length_bond>0 & is.na(length_bond)==FALSE & nochildren == 0")
+  } 
+  
+  test_filts <- c(own = "take_own==1",
+                        illspouse = "take_illspouse==1 & nevermarried == 0 & divorced == 0",
+                        illchild = "take_illchild==1",
+                        illparent = "take_illparent==1",
+                        matdis = "take_matdis==1 & female == 1 & nochildren == 0",
+                        bond = "take_bond==1 & nochildren == 0")
+
+  # using random draw from leave distribution rather than KNN prediction for computational issues
+  #INPUTS: variable requiring imputation, conditionals to filter test and training data on,
+  #        ACS or FMLA observations requiring imputed leave length (test data), FMLA observations constituting the
+  #        sample from which to impute length from (training data)
+  predict <- mapply(runRandDraw, yvar=yvars, train_filt=train_filts,test_filt=test_filts,
+                    MoreArgs = list(d_train=d_train, d_test=d_test), SIMPLIFY = FALSE)
+  # Outputs: data sets of imputed leave length values for ACS or FMLA observations requiring them
+  # merge imputed values with fmla data
+  count=0
+  for (i in predict) {
+    count=count+1
+    if (!is.null(i)) {
+      d_test <- merge(i, d_test, by="id",all.y=TRUE)  
+    }
+    else {
+      d_test[paste0('length_',leave_types[count])] <- 0
+    }
+  }  
+
+  vars_name=c()
+  for (i in leave_types) {
+    vars_name= c(vars_name, paste("length",i, sep="_"))
+  }
+  
+  # update leave vars
+  # H: hmmm I'm a bit lost here. Let's talk through it. I think a lot of this could be solved with left_join
+  # L: I agree this is probably unnecessarily messy. I have a vague memory of trying left_join and something not happening the way I wanted.
+  # HK: OK let's meet to figure this out
+  # LP: Noting for meeting
+  # should be a way to make this cleaner
+  for (i in vars_name) { 
+    x=paste(i,".x",sep="")
+    y=paste(i,".y",sep="")
+    if (x %in% colnames(d_test) & y %in% colnames(d_test)) {
+      d_test[!is.na(d_test[x]) & !is.na(d_test[y]) & d_test[,y]==0 ,i]= 
+        d_test[!is.na(d_test[x]) & !is.na(d_test[y]) & d_test[,y]==0,x]
+      d_test[is.na(d_test[i]),i]= d_test[is.na(d_test[i]),y]  
+    }
+  }
+  
+  # fix logical inconsistency from previous loop in cases returning predicted NA value 
+  # .y column was passing its value if x was na, and that needs to be addressed
+  
+  for (i in leave_types) {
+    var_take=paste("take_",i,sep="")
+    var_length=paste("length_",i,sep="")
+    d_test[d_test[var_take]==0 & is.na(d_test[var_length])==FALSE & is.na(d_test[var_take])==FALSE,var_length]=0
+  }
+  
+  # drop extraneous merge vars
+  for (i in vars_name) { 
+    x=paste(i,".x",sep="")
+    y=paste(i,".y",sep="")
+    if (x %in% colnames(d_test) & y %in% colnames(d_test)) {
+      d_test <- d_test[, !(names(d_test) %in% c(x,y))]
+    }
+  }
+  
+  # replace leave taking and length NA's with zeros now
+  # wanted to distinguish between NAs and zeros in FMLA survey, 
+  # but no need for that in ACS now that we're "certain" of ACS leave taking behavior 
+  # We are "certain" because we only imputed leave takers/non-takers, discarding those with 
+  # uncertain/ineligible status (take_[type]=NA).
+  
+  for (i in leave_types) {
+    len_var=paste("length_",i,sep="")
+    take_var=paste("take_",i,sep="")
+    d_test[len_var] <- with(d_test, ifelse(is.na(get(len_var)),0,get(len_var)))
+    d_test[take_var] <- with(d_test, ifelse(is.na(get(take_var)),0,get(take_var)))
+  }
+  
+  return(d_test)
+}
+# ============================ #
+# 1A. runRandDraw
+# ============================ #
+runRandDraw <- function(d_train,d_test,yvar,train_filt,test_filt) {
+  # filter training cases
+  d_temp <- d_train %>% filter_(train_filt)
+  train <- d_temp %>% filter(complete.cases(yvar))
+  
+  # filter out test cases
+  test <- d_test %>% filter_(test_filt)
+  
+  if (nrow(test)==0) {
+    return()
+  }
+  
+  else {
+    # random draw
+    if (!yvar %in% colnames(test)) {
+      test[yvar]=NA
+    }
+    
+    A <- function(x) train[sample(nrow(train), 1), yvar]
+    test[yvar] <- apply(test[yvar],1, A)
+    
+    # ---can't do this anymore now this is only done post imputation
+    # 
+    # # we also know long_length. So we replace with minimum of 
+    # # (median length of training set & long_length) if draw is greater the length of longest leave
+    # # should think some more about what to do here, I think there's a better way.
+    # # Also, raw leave length distribution looks weird on closer inspection in FMLA data
+    # 
+    # test$median <- median(train[,yvar])
+    # test[yvar] <- with(test, ifelse(!is.na(long_length) & get(yvar)>long_length,
+    #                                     pmin(median, long_length),get(yvar)))
+    
+    est_df <- test[c("id",yvar)]
+    
+    return(est_df) 
+  }
+}
+
+# ============================ #
+# 2. CLONEFACTOR
 # ============================ #
 # allow users to clone ACS individuals
 
@@ -40,6 +201,8 @@ CLONEFACTOR <- function(d, clone_factor) {
     d_clones <- join(d_clones,d,by='id', type='left')
     d_clones$clone_flag=1
     d <- rbind(d,d_clones)
+    # reset id var
+    d['id'] <- as.numeric(rownames(d))
   }
   return(d)
 }
@@ -47,7 +210,7 @@ CLONEFACTOR <- function(d, clone_factor) {
  
 
 # ============================ #
-# 2. PAY_SCHEDULE
+# 3. PAY_SCHEDULE
 # ============================ #
 # Calculate pay schedule for employer paid leave
 
@@ -124,52 +287,183 @@ PAY_SCHEDULE <- function(d) {
 }
 
 # ============================ #
-# 3. ELIGIBILITYRULES
+# 4. ELIGIBILITYRULES
 # ============================ #
 # apply user-specified eligibility criteria and set initial 
 
-ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, ann_hours=NULL, minsize=NULL, bene_level) {
+ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, ann_hours=NULL, minsize=NULL, 
+                             base_bene_level, week_bene_min, formula_prop_cuts=NULL, formula_value_cuts=NULL,
+                             formula_bene_levels=NULL, elig_rule_logic) {
   
-  d['eligworker']= 1
-  
-  # prior earnings in past 12 months
-  if (!is.null(earnings)) {
-    d <- d %>% mutate(eligworker= ifelse(WAGP>=earnings & eligworker==1, 1,0))
+  # ----- apply eligibility rules logic to calculate initial participation ---------------
+  # TODO: This should be redone in a more simple fashion once the input expected from the GUI is hammered out.
+  # strip terms from those criteria in elig_rule_logic that have corresponding NULL values
+  for (i in c('earnings', 'weeks', 'ann_hours', 'minsize')) {
+    if (is.null(get(i))) {
+      elig_rule_logic <- gsub(i,'TRUE',elig_rule_logic)
+    }
   }
   
-  # prior weeks worked in past 12 months
-  if (!is.null(weeks)) {
-    d <- d %>% mutate(eligworker= ifelse(weeks_worked>=weeks & eligworker==1, 1,0))
+  # replace terms in logic string with appropriate conditionals
+  elig_rule_logic <- gsub('earnings','WAGP>=earnings',elig_rule_logic)
+  elig_rule_logic <- gsub('weeks','weeks_worked>=weeks',elig_rule_logic)
+  elig_rule_logic <- gsub('ann_hours','weeks_worked*WKHP>=ann_hours',elig_rule_logic)
+  elig_rule_logic <- gsub('minsize','emp_size>=minsize',elig_rule_logic)
+  
+  # create elig_worker flag based on elig_rule_logic
+  d <- d %>% mutate(eligworker= ifelse(eval(parse(text=elig_rule_logic)), 1,0))
+  
+  # ------ benefit calc --------------
+  # if formulary benefits are not specificed, everyone will simply receive base_bene_level
+  d["benefit_prop"] <- base_bene_level
+  
+  # adjust proportion of pay received if formulary benefits are specified; 
+  # different benefit levels for different incomes with cuts defined by either 
+  # proportion of mean state wage, or absolute wage values
+  if (!is.null(formula_prop_cuts) | !is.null(formula_value_cuts)) {
+    if (is.null(formula_bene_levels)) {
+      stop('if formula_prop_cuts or formula_value_cuts are specified, 
+           formula_bene_levels must also be specified')
+    }
+    d <- FORMULA(d, formula_prop_cuts, formula_value_cuts, formula_bene_levels)
   }
   
-  # total hours worked in past 12 months
-  if (!is.null(ann_hours)) {
-    d <- d %>% mutate(eligworker= ifelse(weeks_worked*WKHP>=ann_hours & eligworker==1, 1,0))
-  }
+  # A non-zero minimum weekly benefit payment will increase effective benefit prop for those that
+  # would otherwise receive lower than that. Adjust bene_prop to account for that when 
+  # simulating participation decision. We're creating a throwaway bene_prop variable, 
+  # as we still want to use actual bene_prop for determining benefits received, then will 
+  # increase weekly payments at the end after all participation is determined.
+  d <- d %>% mutate(benefit_prop_temp = max(week_bene_min/(WAGP/weeks_worked), benefit_prop))
   
-  # firm size of employer
-  if (!is.null(minsize)) {              
-    d <- d %>% mutate(eligworker= ifelse(emp_size>=minsize & eligworker==1, 1,0))
-  }
-  
-  # calculate initial participation
-  # calculate general participation decision based on employer pay vs state program pay
-  
-  d["benefit_prop"] <- bene_level
+  # calculate general participation decision based on employer pay vs state program pay    
+  # those who will receive more under the program will possibly participate
   d["particip"] <- 0
+  d["particip"] <- ifelse(d[,"eligworker"]==1 & d[,"prop_pay"]<d[,"benefit_prop_temp"],1,0)  
   
-  # those who will receive more under the program will participate
-  d["particip"] <- ifelse(d[,"eligworker"]==1 & d[,"prop_pay"]<d[,"benefit_prop"],1,0)  
-  
-  # those who exhaust employer benefits before leave ends will participate
+  # those who exhaust employer benefits before leave ends will possibly participate
   d["particip"] <- ifelse(d[,"eligworker"]==1 & !is.na(d[,'exhausted_by']),1,d[,"particip"])  
   
   return(d)  
 }
 
+# ============================ #
+# 4A. FORMULA
+# ============================ #
+# subfunction to implement formulaic benefit payouts by wage, 
+# rather than a flat proportion for all participants
+# TODO: There might be a simpler way to do this once the input expected from the GUI is hammered out.
+
+FORMULA <- function(d, formula_prop_cuts=NULL, formula_value_cuts=NULL, formula_bene_levels) {
+  
+  #-----------Validation Checks---------------
+  
+  # make sure exactly one of prop cuts and value cuts are specified
+  if (!is.null(formula_prop_cuts) & !is.null(formula_value_cuts)) {
+    stop("formula_prop_cuts and formula_value_cuts are both specified. Only one should be specified")
+  }
+  if (is.null(formula_prop_cuts) & is.null(formula_value_cuts)) {
+    stop("Neither formula_prop_cuts and formula_value_cuts are specified. One must be specified")
+  }
+    
+  # checks to make sure formula_cuts and values are positive and ascending
+  if (!is.null(formula_prop_cuts)) {
+    # make sure formula cuts and bene levels are proper length
+    if (length(formula_prop_cuts)+1 != length(formula_bene_levels)) {
+      stop("formula_bene_levels length must be one greater than formula_prop_cuts length")
+    }
+    
+    prev_val=0
+    for (i in formula_prop_cuts) {
+      if (!is.numeric(i)) {
+        stop("formula_prop_cuts must be numeric")
+      }
+      if (0>i) {
+        stop("formula_prop_cuts must be positive") 
+      }
+      if (prev_val>i) {
+        stop("formula_prop_cuts must be in ascending order")
+      }
+      prev_val=i
+    }
+  }
+  
+  if (!is.null(formula_value_cuts)) {
+    # make sure formula cuts and bene levels are proper length
+    if (length(formula_value_cuts)+1 != length(formula_bene_levels)) {
+      stop("formula_bene_levels length must be one greater than formula_value_cuts length")
+    }
+    
+    prev_val=0
+    for (i in formula_value_cuts) {
+      if (!is.numeric(i)) {
+        stop("formula_value_cuts must be numeric")
+      }
+      if (0>i) {
+        stop("formula_value_cuts must be positive") 
+      }
+      if (prev_val>i) {
+        stop("formula_value_cuts must be nonduplicated, and in ascending order")
+      }
+      prev_val=i
+    }
+  }
+  
+  #------------------Adjust benefit levels: proportionate cuts----------------------
+  if (!is.null(formula_prop_cuts)) {
+    
+    # establish mean wage of population, and everyone's proportion of that value
+    mean_wage=mean(d$WAGP/d$weeks_worked)
+    d['mean_wage_prop']=(d$WAGP/d$weeks_worked)/mean_wage
+    
+    # adjust benefit_prop accordingly
+    # first interval of formula_bene_levels
+    len_cuts=length(formula_prop_cuts)
+    len_lvls=length(formula_bene_levels)
+    d <- d %>% mutate(benefit_prop = ifelse(formula_prop_cuts[1]>mean_wage_prop, 
+                                           formula_bene_levels[1], benefit_prop))
+    # last interval 
+    d <- d %>% mutate(benefit_prop = ifelse(formula_prop_cuts[len_cuts]<=mean_wage_prop, 
+                                           formula_bene_levels[len_lvls], benefit_prop))
+    
+    # rest of the intervals in between
+    prev_val=formula_prop_cuts[1]
+    lvl=1
+    for (i in formula_prop_cuts[2:len_cuts]) {
+      print(i)
+      lvl=lvl+1
+      d <- d %>% mutate(benefit_prop = ifelse(i>mean_wage_prop & prev_val<=mean_wage_prop,
+                                             formula_bene_levels[lvl], benefit_prop))
+      prev_val=i
+    }
+  }
+  
+  #------------------Adjust benefit levels: absolute value cuts----------------------
+  if (!is.null(formula_value_cuts)) {
+    # adjust benefit_prop accordingly
+    # first interval of formula_bene_levels
+    len_cuts=length(formula_value_cuts)
+    len_lvls=length(formula_bene_levels)
+    d <- d %>% mutate(benefit_prop = ifelse(formula_value_cuts[1]>WAGP, 
+                                            formula_bene_levels[1], benefit_prop))
+    # last interval 
+    d <- d %>% mutate(benefit_prop = ifelse(formula_value_cuts[len_cuts]<=WAGP, 
+                                            formula_bene_levels[len_lvls], benefit_prop))
+    
+    # rest of the intervals in between
+    prev_val=formula_value_cuts[1]
+    lvl=1
+    for (i in formula_value_cuts[2:len_cuts]) {
+      lvl=lvl+1
+      d <- d %>% mutate(benefit_prop = ifelse(i>WAGP & prev_val<=WAGP,
+                                              formula_bene_levels[lvl], benefit_prop))
+      prev_val=i
+    }
+  }
+  return(d)
+}
 
 # ============================ #
-# 4. EXTENDLEAVES
+# 5. EXTENDLEAVES
 # ============================ #
 
 # Option to simulate extension of leaves in the presence of an FMLA program
@@ -185,42 +479,27 @@ EXTENDLEAVES <-function(d_train, d_test,wait_period, ext_base_effect,
   }
   
   # Base extension effect from ACM model (referred to as the "old" extension simulation there)
+  # this is a candidate for modular imputation methods
+  
   if (ext_base_effect==TRUE) { 
     
     # specifications
     # using ACM specifications
-    specif <- c("longerLeave ~ age + agesq + female")
+    formula <- "longerLeave ~ age + agesq + female"
     
     # subsetting data
-    conditional <- c("TRUE")
-    
-    test_conditional <- c("TRUE")
-    
+    filt <- "TRUE"
+
     # weights
-    weight <- c("~ fixed_weight")
+    weight <- "~ fixed_weight"
     
     # Run Estimation
-    # INPUT: FMLA data to train logit estimates on
-    estimates <- runLogitEstimate(x = specif, y = conditional, z = weight, d_in=d_train)
-    
-    # OUTPUT: logit coefficients to model probability of taking a longer leave.
-    
-    # calculate a column of probabilities of each leave type based on individual characteristics
-    model=estimates
-    d_test["longerLeave_prob"]=model[["(Intercept)"]]
-    for (dem in names(model)) {
-      if (dem !='(Intercept)') { 
-        d_test[is.na(d_test[,dem]),dem]=0
-        d_test[,"longerLeave_prob"]= d_test[,"longerLeave_prob"] + d_test[,dem]*model[[dem]]
-      }
-      d_test[,"longerLeave_prob"]=exp(d_test[,"longerLeave_prob"])/(1+exp(d_test[,"longerLeave_prob"]))
-    }
-    
-    # randomly determine if longer leave is taken
-    
-    d_test['rand']=runif(nrow(d_test))
-    d_test <- d_test %>% mutate(longer_leave=ifelse(longerLeave_prob>rand,1,0))
-    
+    # INPUT: FMLA (training) data set, ACS (test) data set, logit regression model specification, 
+    # filter conditions, weight to use
+    d_filt <- runLogitEstimate(d_train=d_train, d_test=d_test, formula=formula, test_filt=filt, 
+                               train_filt=filt, weight=weight, varname='longer_leave', create_dummies=TRUE)
+    d_test <- merge(d_filt, d_test, by='id', all.y=TRUE)
+    # OUTPUT: ACS data with imputed column indicating those taking a longer leave.
     
     # Following ACM implementation:
     # i. For workers who have leave lengths in the absence of a program that are
@@ -323,13 +602,13 @@ EXTENDLEAVES <-function(d_train, d_test,wait_period, ext_base_effect,
 }
 
 # ============================ #
-# 4A. runLogitEstimate
+# 5A. runLogitEstimate
 # ============================ #
-# See function 1A, file 2 - impute functions
+# see 3_impute_functions.R, function 1Ba
 
 
 # ============================ #
-# 5. UPTAKE
+# 6. UPTAKE
 # ============================ #
 # specifies uptake rate of those that are eligible for the paid leave program
 # default is "full" - all who are eligible and would receive more money than employer would pay
@@ -393,7 +672,7 @@ UPTAKE <- function(d, own_uptake, matdis_uptake, bond_uptake, illparent_uptake,
   return(d)
 }
 # ============================ #
-# 5A. check_caps
+# 6A. check_caps
 # ============================ #
 # cap particip_length at max program days
 check_caps <- function(d,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
@@ -455,7 +734,7 @@ check_caps <- function(d,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparen
   return(d)
 }
 # ============================ #
-# 6. BENEFITS
+# 7. BENEFITS
 # ============================ #
 # Adding base values for new ACS variables involving imputed FMLA values
 
@@ -479,7 +758,7 @@ BENEFITS <- function(d, leaveprogram) {
   return(d)
 }
 # ============================ #
-# 7. BENEFITEFFECT
+# 8. BENEFITEFFECT
 # ============================ #
 # Accounting for some "cost" of applying for the program when deciding between employer paid leave and program
 
@@ -562,7 +841,7 @@ BENEFITEFFECT <- function(d) {
 }
 
 # ============================ #
-# 8. TOPOFF
+# 9. TOPOFF
 # ============================ #
 # employers who would pay their employees
 # 100 percent of wages while on leave would instead require their employees to participate
@@ -604,13 +883,15 @@ TOPOFF <- function(d, topoff_rate, topoff_minlength) {
   
   # adjust participation flag. leave taken assumed to not be affected by top off behavior
   d <- d %>% mutate(particip=ifelse(topoff_count>0,1,particip))
+  
+  # clean up vars
   d <- d[, !(names(d) %in% c('rand','topoff_rate','topoff_temp','topoff_min','topoff', 'topoff_count'))]
   
   return(d)
 }
 
 # ============================ #
-# 9. DEPENDENTALLOWANCE
+# 10. DEPENDENTALLOWANCE
 # ============================ #
 # include a flat weekly dependent allowance for families with children
 
@@ -620,13 +901,55 @@ DEPENDENTALLOWANCE <- function(d,dependent_allow) {
 }
 
 # ============================ #
-# 10. CLEANUP
+# 11. DIFF_ELIG
+# ============================ #
+# Some state programs have differential eligibility by leave type.
+# For example, NJ's private plan option means about 30% of the PFL eligble population is not
+# eligible for DI.
+# However, eligibility is currently programmed as universally binary.
+# As a workaround for now, this function allows users to simulate this differential eligibility
+# by removing some specified proportion of participation for specific leave types
+# at random from the population 
+
+DIFF_ELIG <- function(d, own_elig_adj, illspouse_elig_adj, illchild_elig_adj,
+                      illparent_elig_adj, matdis_elig_adj, bond_elig_adj) {
+  adjs_vals <- paste0(leave_types, '_elig_adj')
+  plen_vars <- paste0('plen_',leave_types)
+  zip <- mapply(list, adjs_vals, plen_vars, SIMPLIFY=F)
+  # for each pair of leave type/adj val...
+  for (i in zip) {
+    adjs_val=i[[1]]
+    plen_var=i[[2]]
+
+    # select proportion of participants equal of adj value. rest will no longer collect benefits 
+    # for that type (simulating they are ineligible)
+    nsamp <- ceiling(get(adjs_val)*nrow(filter(d, get(plen_var)>0)))
+    
+    # this if statement is necessary here, as sampling a vector of length 1 gets unexpected results if that 
+    # one element is a positive integer.
+    if (nsamp!=1) {
+      psamp <- sample(unname(unlist(c(select(filter(d, get(plen_var)>0), id)))), nsamp, replace = FALSE)
+    }
+    else {
+      psamp <- unname(unlist(c(select(filter(d, get(plen_var)>0), id))))
+    }
+    d [psamp, 'pflag'] <- 1
+    d['pflag'] <- d['pflag'] %>% replace(., is.na(.), 0)
+    d[plen_var] <- with(d, ifelse(get(plen_var)>0 & pflag==0, 0, get(plen_var)))
+    d <- d[, !(names(d) %in% c('pflag'))]
+    # rest of the appropriate vars to adjust are handled in the CLEANUP function next
+  }
+  return(d)
+}
+
+
+# ============================ #
+# 12. CLEANUP
 # ============================ #
 # Final variable alterations and consistency checks
 
 CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,week_bene_min, maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
                     maxlen_total,maxlen_DI,maxlen_PFL) {
-  
   # Check leave length participation caps again 
   # INPUT: ACS data set 
   d <- check_caps(d,maxlen_own, maxlen_matdis, maxlen_bond, maxlen_illparent, maxlen_illspouse, maxlen_illchild,
@@ -650,6 +973,7 @@ CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,week_bene_min, maxlen_ow
   
   # make sure those with particip_length 0 are also particip 0
   d <- d %>% mutate(particip= ifelse(particip_length==0,0, particip))
+  
   
   
   # calculate leave specific benefits
@@ -696,7 +1020,6 @@ CLEANUP <- function(d, week_bene_cap,week_bene_cap_prop,week_bene_min, maxlen_ow
 }
 
 # ============================ #
-# 10A. check_caps
+# 12A. check_caps
 # ============================ #
-# see function 5A.
-# calculate leave specific benefits
+# see function 6A.

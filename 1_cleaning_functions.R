@@ -19,10 +19,9 @@
 # 3. clean_cps
 # 4. impute_cps_to_acs
 # Subfunctions:    
-  # 4a. runLogit
-  # 4b. runLogitImpute
-  # 4c. runOrdinal
-  # 4d. runOrdinalImpute
+  # 4a. runLogitEstimate - see 3_impute_functions.R, function 1Ba
+  # 4b. runOrdinalEstimate
+# 5. sample_acs
 
 
 # ============================ #
@@ -403,7 +402,7 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
 # -------------------------- #
 # ACS Household File
 # -------------------------- #
-clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
+clean_acs <-function(d,d_hh,save_csv=FALSE) {
 
   # create variables
   
@@ -584,10 +583,7 @@ clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
   d$id <- as.numeric(rownames(d))
   d <- d[order(d$id),]
   
-  # adjust weightfactor if user specifies
-  if (weightfactor!=1) {
-    d$PWGTP=d$PWGTP*weightfactor
-  }  
+
   
   # -------------------------- #
   # Remove ineligible workers
@@ -599,19 +595,10 @@ clean_acs <-function(d,d_hh,save_csv=FALSE, weightfactor, GOVERNMENT, SELFEMP) {
   # Restrict dataset to civilian employed workers
   d <- d %>% filter(ESR==1|ESR==2)
   
-  #  Restrict dataset to those that are not self-employed and not gov't workers, 
-  # unless user specifies otherwise
+  #  Include self-employed and gov't workers unless user specifies otherwise
   d <- d %>% filter(COW<=7)
   
-  #
-  if (GOVERNMENT==FALSE) {
-    d <- d %>% filter(COW!=3 & COW!=4 & COW!=5)  
-  }
-  
-  if (SELFEMP==FALSE) {
-    d <- d %>% filter(COW!=6 & COW!=7)  
-  }
-  
+
   # -------------------------- #
   # Save the resulting dataset
   # -------------------------- #
@@ -742,6 +729,8 @@ clean_cps <-function(d_cps) {
 # This program cleans CPS data and runs a number of logit and ordinal logit
 # regressions to produce coefficient estimates to impute some variables into ACS.
 
+# everything in this program is a candidate for modular imputation
+
 impute_cps_to_acs <- function(d_acs, d_cps){
   
   # ---------------------------------------------------------------------------------------------------------
@@ -749,94 +738,72 @@ impute_cps_to_acs <- function(d_acs, d_cps){
   # ---------------------------------------------------------------------------------------------------------
   
   # logit for hourly paid regression
-  
-  specif = c(paid_hrly =  paste("paid_hrly ~ female + black + a_age + agesq + BA",
-                                "+ GradSch + occ_1 + occ_3 + occ_5 + occ_7 + occ_8",
-                                "+ occ_9 + occ_10 + ind_5 + ind_8 + ind_11 + ind_12"))
-  # HK: This means that the whole sample is used?
-  # LP: Yes
-  conditional = c(paid_hrly= "TRUE")
+  varname= 'paid_hrly'
+  formula = paste("paid_hrly ~ female + black + a_age + agesq + BA",
+            "+ GradSch + occ_1 + occ_3 + occ_5 + occ_7 + occ_8",
+            "+ occ_9 + occ_10 + ind_5 + ind_8 + ind_11 + ind_12")
+  filt = c(paid_hrly= "TRUE")
   weight = c(paid_hrly = "~ marsupwt")
   
   # INPUTS: CPS (training) data set, logit regression model specification, training filter condition, weight to use
-  estimate <- runLogitEstimate(d_cps,specif,conditional,weight)
-  # OUTPUT: Logit model estimates for getting paid hourly dummy
-  
-  # INPUTS: ACS (test) data set, Logit model estimates for getting paid hourly dummy, variable to impute
-  #         test filtering condition
-  d_acs <-runLogitImpute(d_acs, estimate,"paid_hrly","TRUE") 
-  # OUTPUT: ACS data with imputed paid hourly variable
-  
-  # INPUTS/OUTPUTS are similar for remaining logits
-  
-  # HK: Is this suposed to be the number of employers? Or employees? If the former, then is the 
-  # "employer size" stuff below for the individual's primary employer?
-  # LP: This is "number of employers individual has worked for in last 12 months". 
-  # Yeah, the employer size stuff is for their primary employer.
+  d_filt <- runLogitEstimate(d_train=d_cps,d_test=d_acs, formula=formula, test_filt=filt, train_filt=filt, 
+                            weight=weight, varname=varname, create_dummies=TRUE)
+  d_acs <- merge(d_filt, d_acs, by='id', all.y=TRUE)
+  # OUTPUT: Dataframe with two columns: id and imputed paid hourly variable
   
   # ordered logit for number of employers
-  # biggest problem with ordered logit currently is it is unweighted; can't use CPS weight without getting a non-convergence error
-  specif = c(num_employers= paste("factor(phmemprs) ~  age + agesq + asian + hisp",
-                                  "+ ltHS + someCol + BA + GradSch + lnearn",
-                                  "+ hiemp + ind_4 + ind_5 + ind_6 + ind_8",
-                                  "+ ind_13 + occ_1 + occ_6 + occ_7 + occ_9 + occ_10"))
-  conditional = c(num_employers= "TRUE")
-  weight = c(num_employers = "marsupwt")
+  varname= 'num_emp'
+  formula = paste("factor(phmemprs) ~  age + agesq + asian + hisp",
+            "+ ltHS + someCol + BA + GradSch + lnearn",
+            "+ hiemp + ind_4 + ind_5 + ind_6 + ind_8",
+            "+ ind_13 + occ_1 + occ_6 + occ_7 + occ_9 + occ_10")
+  filt =  "TRUE"
   
-  # INPUTS: CPS (training) data set, ordinal regression model specification, training filter condition, weight to use
-  estimate <- runOrdinalEstimate(d_cps,specif,conditional,weight)
-  # OUTPUTS: ordinal model estimates for number of employers dummy
-  
-  # INPUTS: ACS (test) data set, ordinal model estimates for getting number of employers dummy, variable to impute
-  #         test filtering condition
-  d_acs <- runOrdinalImpute(d_acs, estimate,"num_emp","TRUE")
+  # INPUTS: CPS (training) data set, ordinal regression model specification, filter conditions, var to create 
+  d_filt <- runOrdinalEstimate(d_train=d_cps,d_test=d_acs, formula=formula,test_filt=filt,
+                              train_filt=filt, varname=varname)
+  d_acs <- merge(d_filt, d_acs, by='id', all.y=TRUE)
   # OUTPUTS: ACS data with imputed number of employers variable
+
+  # ordered logit for weeks worked categories
+  formulas= c(wks_50_52="factor(wkswork) ~ age + agesq +  black + hisp + lnearn",
+              wks_40_47="factor(wkswork) ~ age + lnearn" ,
+              wks_27_39="factor(wkswork) ~ age + fem_cu6 + fem_c617 + fem_cu6and617 + female + lnearn" ,
+              wks_14_26="factor(wkswork) ~ age + hisp + lnearn" ,
+              wks_0_13="factor(wkswork) ~ age + agesq + female + lnearn" )
+  train_filts= c(wks_50_52="wks_cat==1" ,
+                 wks_40_47="wks_cat==3" ,
+                 wks_27_39="wks_cat==4" ,
+                 wks_14_26="wks_cat==5" ,
+                 wks_0_13="wks_cat==6" )
+  test_filts= c(wks_50_52="WKW==1",
+                wks_40_47="WKW==3" ,
+                wks_27_39="WKW==4" ,
+                wks_14_26="WKW==5" ,
+                wks_0_13="WKW==6" )
+  varnames= c (wks_50_52='wks_50_52',
+               wks_40_47='wks_40_47' ,
+               wks_27_39='wks_27_39' ,
+               wks_14_26='wks_14_26' ,
+               wks_0_13='wks_0_13' )            
   
-  # INPUTS/OUTPUTS are similar for remaining ordinals
   
-  # ordered logit for weeks worked - 50-52 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + agesq +  black + hisp + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==1")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps,specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_50_52","WKW==1")
-  
-  # logit for weeks worked - 48-49 weeks
-  specif = c(iweeks_worked= paste("wks_48_49 ~ age + agesq + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==2")
-  weight = c(iweeks_worked = "~ marsupwt")
-  # HK: Why is this logit and not ordinal? Because there's just one cutoff?
-  # LP: Yep, exactly
-  estimate <- runLogitEstimate(d_cps,specif,conditional,weight)
-  d_acs <- runLogitImpute(d_acs, estimate,"wks_48_49","WKW==2")
-  
-  # ordered logit for weeks worked - 40-47 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==3")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps,specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_40_47","WKW==3")
-  
-  # ordered logit for weeks worked - 27-39 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + fem_cu6 + fem_c617 + fem_cu6and617 + female + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==4")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps, specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_27_39","WKW==4")
-  
-  # ordered logit for weeks worked - 14-26 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + hisp + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==5")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps, specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_14_26","WKW==5")
-  
-  # ordered logit for weeks worked - <13 weeks
-  specif = c(iweeks_worked= paste("factor(wkswork) ~  age + agesq + female + lnearn"))
-  conditional = c(iweeks_worked= "wks_cat==6")
-  weight = c(iweeks_worked = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps, specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"wks_0_13","WKW==6")
+  sets <- mapply(runOrdinalEstimate, formula=formulas,test_filt=test_filts,
+                                    train_filt=train_filts, varname=varnames,
+                                    MoreArgs=list(d_train=d_cps,d_test=d_acs),
+                                    SIMPLIFY=FALSE)
+  for (i in sets) {
+    d_acs <- merge(i, d_acs, by='id', all.y=TRUE)
+  }
+          
+  # one category only has 2 categories, so using a logit 
+  varname= 'wks_48_49'
+  formula = "wks_48_49 ~ age + agesq + lnearn"
+  train_filt = "wks_cat==2"
+  test_filt= "WKW==2"
+  d_filt <- runLogitEstimate(d_train=d_cps,d_test=d_acs, formula=formula, test_filt=test_filt, 
+                             train_filt=train_filt, weight=weight, varname=varname, create_dummies=TRUE)
+  d_acs <- merge(d_filt, d_acs, by='id', all.y=TRUE)
   
   # create single weeks worked var
   d_acs <- d_acs %>% mutate (iweeks_worked= ifelse(!is.na(wks_50_52),wks_50_52+49,0)) %>% 
@@ -847,14 +814,15 @@ impute_cps_to_acs <- function(d_acs, d_cps){
     mutate (iweeks_worked= ifelse(!is.na(wks_0_13),wks_0_13,iweeks_worked))
   
   # Ordered logit employer size categories
-  specif = c(emp_size =  paste("factor(emp_size) ~ a_age + black + ltHS + someCol + BA + GradSch + lnearn",
-                               "  + hiemp + ind_1 + ind_3 + ind_5 + ind_6 + ind_8 + ind_9",
-                               "+ ind_11 + ind_12 + ind_13 + occ_1 + occ_4 + occ_5 + occ_6 + occ_7 + occ_9"))
-  conditional = c(emp_size= "TRUE")
-  weight = c(emp_size = "marsupwt")
-  estimate <- runOrdinalEstimate(d_cps, specif,conditional,weight)
-  d_acs <- runOrdinalImpute(d_acs, estimate,"emp_size","TRUE")
-  
+  varname = 'emp_size'
+  formula = paste("factor(emp_size) ~ a_age + black + ltHS + someCol + BA + GradSch + lnearn",
+                 "  + hiemp + ind_1 + ind_3 + ind_5 + ind_6 + ind_8 + ind_9",
+                 "+ ind_11 + ind_12 + ind_13 + occ_1 + occ_4 + occ_5 + occ_6 + occ_7 + occ_9")
+  filt = "TRUE"
+  weight = "marsupwt"
+  d_filt <- runOrdinalEstimate(d_train=d_cps,d_test=d_acs, formula=formula,test_filt=filt,
+                               train_filt=filt, varname=varname)
+  d_acs <- merge(d_filt, d_acs, by='id', all.y=TRUE)
   
   # then do random draw within assigned size range
   d_acs <- d_acs %>% mutate(temp_size=ifelse(emp_size==1,sample(1:9, nrow(d_acs), replace=T),0)) %>%
@@ -862,85 +830,91 @@ impute_cps_to_acs <- function(d_acs, d_cps){
     mutate(temp_size=ifelse(emp_size==3,sample(50:99, nrow(d_acs), replace=T),temp_size)) %>%
     mutate(temp_size=ifelse(emp_size==4,sample(100:499, nrow(d_acs), replace=T),temp_size)) %>%
     mutate(temp_size=ifelse(emp_size==5,sample(500:999, nrow(d_acs), replace=T),temp_size)) %>%
-    mutate(temp_size=ifelse(emp_size==6,sample(1000:9999, nrow(d_acs), replace=T),temp_size)) %>%
+    mutate(temp_size=ifelse(emp_size==6,sample(1000:99999, nrow(d_acs), replace=T),temp_size)) %>%
     mutate(emp_size=temp_size) %>%
     mutate(weeks_worked_cat=weeks_worked) %>%
     mutate(weeks_worked=iweeks_worked)
   
-  
   # clean up vars
   d_acs <- d_acs[, !(names(d_acs) %in% c('rand','temp_size','iweeks_worked',
                                          "wks_0_13", "wks_14_26", "wks_27_39", "wks_40_47", 
-                                         "wks_48_49", "wks_50_52", "num_emp" ))]
+                                         "wks_48_49", "wks_50_52" ))]
   return(d_acs)
 }
 
 # ============================ #
 # 4A. runLogitEstimate
 # ============================ #
-# see function 1A
+# see 3_impute_functions.R, function 1Ba
 
 # ============================ #
-# 4B. runLogitImputation
-# ============================ #
-# see function 1B
-
-# ============================ #
-# 4C. runOrdinalEstimate
+# 4B. runOrdinalEstimate
 # ============================ #
 # MASS implementation, polr function
-runOrdinalEstimate <- function(d_cps,x,y,z){
-  estimate <- polr(as.formula(x), data = d_cps %>% filter_(y))
-  return(estimate)
+# biggest problem with ordered logit currently is it is unweighted; can't use CPS weight without getting a non-convergence error
+runOrdinalEstimate <- function(d_train,d_test, formula, test_filt,train_filt, varname){
   
   # 
-  #   # OGLMX implementation - gives pretty non sensical results from my efforts
+  #   # OGLMX ordinal implementation - gives pretty non sensical results from my efforts
   #   runOrdinal <- function(x,y,z){
   #      results.ologit <- oglmx(as.formula(x), data = d_cps %>% filter_(y), weights=marsupwt)
   #      pause()
   #      return(estimate)
   #   }
   
-}
-
-# ============================ #
-# 4D. runOrdinalImputation
-# ============================ #
-# Function to apply estimate to training data set, ordinal
-runOrdinalImpute <- function(d_in, estimate, varname, tcond) {
-  d <- d_in %>% filter_(tcond)
+  # get estimates from training data
+  estimate <- polr(as.formula(formula), data = d_train %>% filter_(train_filt))
+  
+  #filter test data
+  d_filt <- d_test %>% filter_(test_filt)
   
   # ensure there is at least one row in test data set that needs imputing
-  if (!is.null(rownames(d))) {
+  if (!is.null(rownames(d_filt))) {
     
     # calculate score from ordinal model
     model=estimate$coefficients
-    d['var_score']=0
+    d_filt['var_score']=0
     for (dem in names(model)) {
       if (dem !='(Intercept)') { 
-        d[is.na(d[,dem]),dem]=0
-        d[,'var_score']= d[,'var_score'] + d[,dem]*model[dem]
+        d_filt[is.na(d_filt[,dem]),dem]=0
+        d_filt[,'var_score']= d_filt[,'var_score'] + d_filt[,dem]*model[dem]
       }
     }
     
     # assign categorical variable based on ordinal cuts
     cuts= estimate$zeta
     cat_num= length(cuts)+1
-    d[varname] <- 0
-    d['rand']=runif(nrow(d))
+    d_filt[varname] <- 0
+    d_filt['rand']=runif(nrow(d_filt))
     for (i in seq(cat_num)) {
       if (i!=cat_num) {
-        d <- d %>% mutate(cumprob= var_score-cuts[i])
-        d <- d %>% mutate(cumprob2= exp(cumprob)/(1+exp(cumprob)))
-        d[varname] <- with (d, ifelse(get(varname)==0 & rand>=cumprob2,i,get(varname)))
+        d_filt <- d_filt %>% mutate(cumprob= var_score-cuts[i])
+        d_filt <- d_filt %>% mutate(cumprob2= exp(cumprob)/(1+exp(cumprob)))
+        d_filt[varname] <- with (d_filt, ifelse(get(varname)==0 & rand>=cumprob2,i,get(varname)))
       }
       else {
-        d[varname] <- with (d, ifelse(get(varname)==0,i,get(varname)))
+        d_filt[varname] <- with (d_filt, ifelse(get(varname)==0,i,get(varname)))
       }
     }
-    # keep just the new variable and id
-    d <- d[c(varname, "id")]
-    d_in <- merge( d, d_in, by="id",all.y=TRUE)
+    d_filt <- d_filt[,c(varname, 'id')]
+    return(d_filt)
   }
-  return(d_in)
-}  
+}
+
+# ============================ #
+# 5. sample_acs
+# ============================ #
+# user option to sample ACS data, either by number of observations or proportion of obs
+sample_acs <- function(d, sample_prop, sample_num) {
+  # user option to sample ACS data
+  if (!is.null(sample_prop)) {
+    samp=round(nrow(d)*sample_prop,digits=0)
+    d$PWGTP=d$PWGTP/sample_prop
+    d <- sample_n(d, samp)
+  }
+  if (!is.null(sample_num)) {
+    d$PWGTP=d$PWGTP*(nrow(d)/sample_num)
+    d <- sample_n(d, sample_num)
+  }
+  return(d)
+}

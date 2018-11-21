@@ -6,7 +6,7 @@ options(error=recover)
 #options(error=NULL)
 
 # sample master execution function for testing code
-source("0_NEW_master_execution_function.R")
+source("0_master_execution_function.R")
 
 #First time, preload cleaned data sets to speed up testing
 # policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
@@ -25,12 +25,11 @@ d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   acs_person_csv="ss16pri_short.csv",
                   acs_house_csv="ss16hri_short.csv",
                   cps_csv="CPS2014extract.csv",
-                  useCSV=TRUE,
+                  useCSV=FALSE,
                   saveDF=FALSE,
                   leaveprogram=TRUE,
-                  bene_level=.55,
+                  base_bene_level=.55,
                   impute_method="KNN1",
-                  GOVERNMENT=TRUE,
                   #sample_prop=.95,
                   ext_base_effect=TRUE, extend_prob=.01, extend_days=1, extend_prop=1.01, topoff_rate=.01, topoff_minlength=10,
                   bene_effect=TRUE, full_particip_needer=FALSE, wait_period=5, clone_factor=0, week_bene_cap=1216,
@@ -38,7 +37,8 @@ d <- policy_simulation(fmla_csv="fmla_2012_employee_restrict_puf.csv",
                   illspouse_uptake=.25, illchild_uptake=.25,
                   maxlen_own =260, maxlen_matdis =260, maxlen_bond =30, maxlen_illparent =30, 
                   maxlen_PFL= 30, maxlen_DI=260, maxlen_total=260,
-                  maxlen_illspouse =30, maxlen_illchild =30,earnings=300, output='states',
-                  output_stats='state_compar', random_seed=NULL)
+                  maxlen_illspouse =30, maxlen_illchild =30,earnings=30000, 
+                  formula_value_cuts=c(20000, 50000, 100000), formula_bene_levels=c(.4,.5,.6,.7),
+                  output='states', output_stats='state_compar', random_seed=NULL)
 end_time <- Sys.time()
 print(end_time - start_time)
