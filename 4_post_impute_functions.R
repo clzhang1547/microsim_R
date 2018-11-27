@@ -924,16 +924,8 @@ DIFF_ELIG <- function(d, own_elig_adj, illspouse_elig_adj, illchild_elig_adj,
     # select proportion of participants equal of adj value. rest will no longer collect benefits 
     # for that type (simulating they are ineligible)
     nsamp <- ceiling(get(adjs_val)*nrow(filter(d, get(plen_var)>0)))
-    
-    # this if statement is necessary here, as sampling a vector of length 1 gets unexpected results if that 
-    # one element is a positive integer.
-    if (nsamp!=1) {
-      psamp <- sample(unname(unlist(c(select(filter(d, get(plen_var)>0), id)))), nsamp, replace = FALSE)
-    }
-    else {
-      psamp <- unname(unlist(c(select(filter(d, get(plen_var)>0), id))))
-    }
-    d [psamp, 'pflag'] <- 1
+    psamp <- sample_n(filter(d, get(plen_var)>0), nsamp)
+    d[d[,'id'] %in% psamp[,'id'],'pflag'] <-1
     d['pflag'] <- d['pflag'] %>% replace(., is.na(.), 0)
     d[plen_var] <- with(d, ifelse(get(plen_var)>0 & pflag==0, 0, get(plen_var)))
     d <- d[, !(names(d) %in% c('pflag'))]

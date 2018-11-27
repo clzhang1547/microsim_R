@@ -25,6 +25,8 @@
   # 1A. KNN1_scratch
   # 1B. logit_leave_method
       # 1Ba. runLogitImpute - used in hardcoded methods found elsewhere as well
+  # 1C. KNN_multi
+  # 1D. Naive_Bayes
 
 # ============================ #
 # 1. impute_fmla_to_acs
@@ -33,7 +35,7 @@
 # Based on user-specified method, impute leave taking behavior in fmla to ACS
 # default is KNN1
 
-impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_method,xvars) {
+impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_method,xvars,kval) {
   # d_fmla - modified fmla data set
   # d_fmla_orig - unmodified fmla data set
   # d_acs - ACS data set
@@ -80,8 +82,8 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
   
   # Save ACS and FMLA Dataframes at this point to document format that 
   # alternative imputation methods will need to expect
-  saveRDS(d_fmla, file="./R_dataframes/d_fmla_impute_input.rds") # Remove from final version
-  saveRDS(d_acs, file="./R_dataframes/d_acs_impute_input.rds") # Remove from final version
+  saveRDS(d_fmla, file="./R_dataframes/d_fmla_impute_input.rds") # TODO: Remove from final version
+  saveRDS(d_acs, file="./R_dataframes/d_acs_impute_input.rds") # TODO: Remove from final version
   
   # KNN1 imputation method
   if (impute_method=="KNN1") {
@@ -97,7 +99,7 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
     }  
     
     # save output for reference when making other methods
-    saveRDS(d_acs, file="./R_dataframes/d_acs_impute_output.rds") # Remove from final version
+    saveRDS(d_acs, file="./R_dataframes/d_acs_impute_output.rds") # TODO: Remove from final version
   }
   
   # Logit estimation of leave taking to compare with Chris' results in Python
@@ -105,6 +107,25 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
     d_acs <- logit_leave_method(d_test=d_acs, d_train=d_fmla, xvars=xvars, 
                                 yvars=yvars, test_filts=filts, train_filts=filts, 
                                 weights=weights, create_dummies=TRUE)
+  }
+  
+  if (impute_method=="KNN_multi") {
+    # INPUTS: variable to be imputed, conditionals to filter training and test data on, FMLA data (training), and
+    #         ACS data (test), id variable, and dependent variables to use in imputation, number of nbors
+    impute <- mapply(KNN_multi, imp_var=yvars,train_filt=filts, test_filt=filts,
+                     MoreArgs=list(d_train=d_fmla,d_test=d_acs,xvars=xvars, kval=kval), SIMPLIFY = FALSE)
+    
+    # OUTPUTS: list of data sets for each leave taking/other variables requiring imputation. 
+    # merge imputed values with acs data
+    for (i in impute) {
+      d_acs <- merge(i, d_acs, by="id",all.y=TRUE)
+    }  
+    
+  }
+  if (impute_method=="Naive_Bayes") {
+    d_acs <- Naive_Bayes(d_test=d_acs, d_train=d_fmla, xvars=xvars, 
+                         yvars=yvars, test_filts=filts, train_filts=filts, 
+                         weights=weights)
   }
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -189,11 +210,10 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars)
     m_train[y,colnames(train)!='nbor_id' & colnames(train)!=imp_var]
   })
   
-  # mark neighbor as minimium distance
-  start_time <-Sys.time()
+  # mark minimium distance
   min_start <- ncol(train)-2
   
-  f1 <- function(j) {
+  where_min <- function(j) {
     min_dist <- min_start
     d <- mapply(find_dist, x=nest_train, MoreArgs=list(y=j))
     return(which.min(d))
@@ -203,7 +223,7 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars)
     return((sum((x - y) ^ 2))^(0.5))
   } 
   
-  temp <- lapply(nest_test, f1)
+  temp <- lapply(nest_test, where_min)
   temp <- unlist(temp)
   temp <- cbind(test["id"],as.data.frame(unlist(temp)))
   colnames(temp)[colnames(temp)=="unlist(temp)"] <- "nbor_id"
@@ -241,6 +261,7 @@ logit_leave_method <- function(d_test, d_train, xvars, yvars, test_filts, train_
   
   # generate formulas for logistic regression
   # need formula strings to look something like "take_own ~ age + agesq + male + ..." 
+  
   formulas=c()
   for (i in yvars) { 
     formulas= c(formulas, 
@@ -278,6 +299,7 @@ logit_leave_method <- function(d_test, d_train, xvars, yvars, test_filts, train_
   
   return(d_test)
 }
+
 # ============================ #
 # 1Ba. runLogitEstimate
 # ============================ #
@@ -315,3 +337,147 @@ runLogitEstimate <- function(d_train,d_test, formula, test_filt,train_filt, weig
   return(d_filt)
 }
 
+# ============================ #
+# 1C. KNN_multi
+# ============================ #
+# Define KNN matching method, but allowing multiple (k) neighbors 
+KNN_multi <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars, kval) { 
+  
+  # starts the same way as KNN1_scratch
+  
+  # This returns a dataframe of length equal to acs with the employee id and a column for each leave type
+  # that indicates whether or not they took the leave.
+  
+  # create training data
+  
+  # filter dataset and keep just the variables of interest
+  train <-  d_train %>% filter(complete.cases(select(d_train, 'id', imp_var,xvars))) %>% 
+    filter_(train_filt) %>%
+    select(imp_var, xvars) %>%
+    mutate(id = NULL)
+  train ['nbor_id'] <- as.numeric(rownames(train))
+  
+  # create test data set 
+  # This is a dataframe just with the variables in the acs that will be used to compute distance
+  
+  test <- d_test %>% filter_(test_filt) %>%
+    select(id, xvars) %>%
+    filter(complete.cases(.))
+  
+  # Initial checks
+  
+  # check for data frames
+  if ((!is.data.frame(train)) | (!is.data.frame(test))) {
+    stop("train_set and test_set must be data frames")
+  }  
+  
+  # check for missing data
+  if (anyNA(train) | anyNA(test)) {
+    stop("missing values not allowed in train_test or test_set")
+  }
+  
+  
+  # normalize training data to equally weight differences between variables
+  for (i in colnames(train)) {
+    if (i != 'nbor_id' & i != imp_var & sum(train[i])!=0 ){
+      train[i] <- scale(train[i],center=0,scale=max(train[,i]))
+    }
+  } 
+  
+  for (i in colnames(test)) {
+    if (i != 'id' & sum(test[i])!=0 ){
+      test[i] <- scale(test[i],center=0,scale=max(test[,i]))
+    }
+  } 
+  
+  # id var must be first variable of data
+  
+  # find distance
+  
+  m_test <- as.matrix(test)
+  m_train <-as.matrix(train)
+  
+  nest_test <- list()
+  nest_train <- list()
+  
+  # nested lists of vectors for apply functions
+  nest_test <- lapply(seq(1,nrow(m_test)) , function(y){ 
+    m_test[y,colnames(test)!='id']
+  })
+  nest_train <- lapply(seq(1,nrow(m_train)) , function(y){ 
+    m_train[y,colnames(train)!='nbor_id' & colnames(train)!=imp_var]
+  })
+  
+  # mark minimium distance
+  min_start <- ncol(train)-2
+  
+  find_dist <- function(x,y) {
+    return((sum((x - y) ^ 2))^(0.5))
+  } 
+  
+  # same as KNN1 up until here
+  where_min <- function(j) {
+    min_dist <- min_start
+    d <- mapply(find_dist, x=nest_train, MoreArgs=list(y=j))
+    nbors <- order(d)[1:kval]
+    return(nbors)
+  }
+  
+  # create nbors: data set for each test obs' nearest neighbors in train dataset with their index
+  nbors <- lapply(nest_test, where_min)
+  nbors <- as.data.frame(t(as.data.frame(nbors)))
+  # store test id in nbors set before continuing
+  rownames(nbors) <- NULL
+  colnames(nbors) <- paste0(rep('nbor_id',kval), seq(1,kval))
+  nbors['id'] <- test$id
+  # add impute variable's values for each index from training data set
+  for (i in seq(kval)) {
+    nbors <- merge(nbors, train[c('nbor_id',imp_var)], by.x=paste0('nbor_id',i), by.y='nbor_id', how='left')
+    colnames(nbors)[kval+i+1] <- c(paste0('nbor_val', i))
+  }
+
+  # To decide on a single value to impute:
+  # we will pick the mode value among nbors, weighted by distance
+  # There are other ways of picking a single value, I'm sure
+  
+  # throwaway function to get mode of rows
+  Mode <- function(x) {
+    ux <- unique(x)
+    ux[which.max(tabulate(match(x, ux)))]
+  }
+  nbors[imp_var] <- apply(nbors[(kval+2):(kval*2+1)], 1, Mode)
+  temp <- merge(nbors[c('id',imp_var)], test['id'], by='id')
+  return(temp)
+}
+
+# ============================ #
+# 1D. Naive_Bayes
+# ============================ #
+# Naive Bayes imputation function
+
+Naive_Bayes <- function(d_train, d_test, yvars, train_filts, test_filts, weights, xvars) {
+  
+  # generate formulas for Naive Bayes model
+  # need formula strings to look something like "take_own ~ age + agesq + male + ..." 
+  formulas <- c()
+  for (i in yvars) { 
+    formulas <- c(formulas, 
+                paste(i, "~",  paste(xvars[1],'+', paste(xvars[2:length(xvars)] , collapse=" + "))))
+  }
+  names(formulas) <- names(yvars)
+
+  # predict each yvar 
+  for (i in names(yvars)) {
+    
+    # generate NB model from training data
+    d_train_filt <- d_train %>% filter(complete.cases(select(d_train, yvars[i], xvars))) %>% filter_(train_filts[i])  
+    model <- naiveBayes(x = d_train_filt[xvars], y = d_train_filt[yvars[i]])
+    
+    # apply model to test data 
+    d_test_filt <- d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i]) 
+    predict <- predict(object=model, newdata = d_test_filt)
+    browser()
+  }
+
+  return(d_test)
+}

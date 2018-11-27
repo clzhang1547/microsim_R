@@ -61,6 +61,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               LOCALGOV=FALSE,
                               SELFEMP=FALSE, 
                               impute_method="KNN1",
+                              kval= 3,
                               xvars=c("widowed", "divorced", "separated", "nevermarried", "female", 
                                          "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
                                          "white", "asian", "hisp","nochildren"),
@@ -92,9 +93,10 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     return("OK")
   }
   
+  # TODO: description of uses of dependent libraries, perhaps?
   global.libraries <- c('extraDistr', 'stats', 'rlist', 'MASS', 'plyr', 'dplyr', 
                         'survey', 'class', 'dummies', 'varhandle', 'oglmx', 
-                        'foreign', 'ggplot2', 'reshape2')
+                        'foreign', 'ggplot2', 'reshape2','e1071')
   
   results <- sapply(as.list(global.libraries), pkgTest)
   
@@ -201,15 +203,15 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # INPUT: ACS Data
   d_acs <- acs_filtering(d_acs, weightfactor, FEDGOV, STATEGOV, LOCALGOV, SELFEMP)
   # OUTPUT: Filtered ACS data
-  
+
   # default is just simple nearest neighbor, K=1 
   # This is the big beast of getting leave behavior into the ACS.
   # INPUT: cleaned acs/fmla data, leaveprogram=TRUE/FALSE, method for imputation, dependent variables 
   #         used for imputation
-  d_acs_imp <- impute_fmla_to_acs(d_fmla,d_fmla_orig,d_acs,leaveprogram, impute_method, xvars)  
+  d_acs_imp <- impute_fmla_to_acs(d_fmla,d_fmla_orig,d_acs,leaveprogram, impute_method, xvars, kval)  
   # OUTPUT: ACS data with imputed values for a) leave taking and needing, b) proportion of pay received from
   #         employer while on leave, and c) whether leave needed was not taken due to unaffordability 
-    
+
   # -------------Post-imputation functions-----------------
   # ---------------------------------------------------------------------------------------------------------
   # Impute Days of Leave Taken
@@ -236,7 +238,7 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # INPUT: ACS file
   d_acs_imp <- CLONEFACTOR(d_acs_imp, clone_factor)
   # OUTPUT: ACS file with user-specifed number of cloned records
-     
+
   # Assign employer pay schedule for duration of leaves via imputation from Westat 2001 survey probabilities
   # Then, flag those who will have exhausted employer benefits with leave remaining, and will apply 
   # to leave program for remainder of their leave
@@ -297,13 +299,11 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
     d_acs_imp <- DEPENDENTALLOWANCE(d_acs_imp,dependent_allow)
     # OUTPUT: ACS file with program benefit amounts including a user-specified weekly dependent allowance
   }
-  
   # Apply type-specific elig adjustments 
   if (leaveprogram==TRUE) {
     d_acs_imp <- DIFF_ELIG(d_acs_imp, own_elig_adj, illspouse_elig_adj, illchild_elig_adj,
                            illparent_elig_adj, matdis_elig_adj, bond_elig_adj)
   }
-  
   # final clean up 
   # INPUT: ACS file
   d_acs_imp <- CLEANUP(d_acs_imp, week_bene_cap,week_bene_cap_prop,week_bene_min, maxlen_own, maxlen_matdis, maxlen_bond, 
@@ -324,7 +324,6 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   if (output_stats=='state_compar') {
     state_compar_stats(d_acs_imp, output)
   }
-  
   return(d_acs_imp)
 }
 
