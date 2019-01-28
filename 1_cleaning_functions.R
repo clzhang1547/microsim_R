@@ -191,10 +191,10 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(doctor2 = ifelse(is.na(LEAVE_CAT) == FALSE & (LEAVE_CAT == 2 | LEAVE_CAT == 4), doctor_need, doctor_take))  
   
   d_fmla <- d_fmla %>% mutate(hospital1 = ifelse(is.na(LEAVE_CAT) == FALSE & LEAVE_CAT == 2, hospital_need, hospital_take))
-  
   d_fmla <- d_fmla %>% mutate(hospital2 = ifelse(is.na(LEAVE_CAT) == FALSE & (LEAVE_CAT == 2 | LEAVE_CAT == 4), hospital_need, hospital_take))  
   
   # length of leave for most recent leave
+  
   d_fmla <- d_fmla %>% mutate(length = ifelse(is.na(A20) == FALSE & A20 == 2, A19_2_CAT_rev, A19_1_CAT_rev))
   
   # 10/9, Luke: changing to be longest leave, regardless of if it is different from most recent leave or not
@@ -221,6 +221,49 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   # could not afford to take leave
   d_fmla <- d_fmla %>% mutate(unaffordable = ifelse(B15_1_CAT == 5, 1, 0))
   
+  # Resp_len - more nuanced unaffordable variable used in the Python implementation
+  # LEAVE_CAT: employed only
+  # EMPLOYED ONLY workers have no need and take no leave, would not respond anyway
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse(LEAVE_CAT == 3, 0, NA))
+  
+  # A55 asks if worker would take longer leave if paid?
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & A55 == 2, 0, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & A55 == 1, 1, resp_len))
+  
+  # The following variables indicate whether leave was cut short for financial issues
+  # A23c: unable to afford unpaid leave due to leave taking
+  # A53g: cut leave time short to cover lost wages
+  # A62a: return to work because cannot afford more leaves
+  # B15_1_CAT, B15_2_CAT: can't afford unpaid leave
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & A23c == 1, 1, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & A53g == 1, 1, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & A62a == 1, 1, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & B15_1_CAT == 5, 1, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & B15_2_CAT == 5, 1, resp_len))
+
+  # B15_1_CAT and B15_2_CAT only has one group (cod = 5) identified as constrained by unaffordability
+  # These financially-constrained workers were assigned resp_len=1 above, all other cornered workers would not respond
+  # Check reasons of no leave among rest: d[d['resp_len'].isna()].B15_1_CAT.value_counts().sort_index()
+  # all reasons unsolved by replacement generosity
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & A23c == 2, 0, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & A53g == 2, 0, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & A62a == 2, 0, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & (!is.na(B15_1_CAT)), 0, resp_len))
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & (!is.na(B15_2_CAT)), 0, resp_len))
+  
+  # Assume all takers/needers with ongoing condition are 'cornered' and would respond with longer leaves
+  # A10_1, A10_2: regular/ongoing condition, takers and dual
+  # B11_1, B11_2: regular/ongoing condition, needers and dual
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)) & ((
+    A10_1 == 2) | (A10_1 == 3) | (B11_1 == 2) | (B11_1 == 3)), 1, resp_len))
+
+
+  # Check LEAVE_CAT of rest: 
+  #table(d_fmla$resp_len, d_fmla$LEAVE_CAT, useNA = 'always')
+  # 3 takers, 3 needers still remain
+  # for set to sensitive to be conservative
+  d_fmla <- d_fmla %>% mutate(resp_len = ifelse((is.na(resp_len)), 1, resp_len))
+  
   # any pay received
   d_fmla <- d_fmla %>% mutate(anypay = ifelse(A45 == 1, 1, 0))
   
@@ -234,7 +277,6 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(prop_pay = ifelse(A45 == 2, 0, prop_pay))
   
   # Adding values in leave program variables for starting condition (absence of program)
-  
   # Leave Program Participation
   # baseline is absence of program, so this will start as a nonparticipant
   d_fmla  <- d_fmla  %>% mutate(particip = 0)
@@ -275,13 +317,13 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   # (3) taking or needing a leave - type_*
   # (4) length of most recent leave - length_*
   
-  # also need to know if the longest leave is that type, and different from most recent type - long_*
+  # also need to know if the longest leave is that type - long_*
   # Length of above leave - longlength_*
-  # 10/9, Luke: changing to be longest leave, regardless of if it is different from most recent leave or not
+  
   
   # maternity disability
-  d_fmla <- d_fmla %>% mutate(take_matdis = ifelse((A5_1_CAT == 21 & A11_1 == 1 & GENDER_CAT == 2 & (A20 != 2|is.na(A20)))
-                                                                     | A5_1_CAT_rev == 32 , 1, 0))
+  d_fmla <- d_fmla %>% mutate(take_matdis = ifelse(((A5_1_CAT == 21 & A11_1 == 1 & GENDER_CAT == 2) | A5_1_CAT_rev == 32) & (A20 != 2 | is.na(A20) == TRUE) , 1, 0))
+  d_fmla <- d_fmla %>% mutate(take_matdis = ifelse(((A5_2_CAT == 21 & A11_2 == 1 & GENDER_CAT == 2) | A5_2_CAT_REV == 32) & (A20 == 2 & is.na(A20)== FALSE) , 1, take_matdis))
   d_fmla <- d_fmla %>% mutate(take_matdis = ifelse(is.na(take_matdis) == 1,0,take_matdis))
   d_fmla <- d_fmla %>% mutate(take_matdis = ifelse(is.na(A5_1_CAT) == 1 & is.na(A5_2_CAT) == 1, NA, take_matdis))
   d_fmla <- d_fmla %>% mutate(take_matdis = ifelse(is.na(take_matdis) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0, take_matdis))
@@ -304,7 +346,10 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(longlength_matdis = ifelse(long_matdis==1,long_length, 0))
   
   # new child/bond
-  d_fmla <- d_fmla %>% mutate(take_bond = ifelse(A5_1_CAT==21 & (is.na(A11_1) == 1 | GENDER_CAT == 1 | (GENDER_CAT==2 & A11_1==2 & A5_1_CAT_rev!=32)) & (A20 != 2|is.na(A20)),1,0))
+  d_fmla <- d_fmla %>% mutate(take_bond = ifelse(A5_1_CAT==21 & (is.na(A11_1) == 1 | GENDER_CAT == 1 | (GENDER_CAT==2 & A11_1==2 & A5_1_CAT_rev!=32))
+                                                 & (A20 != 2|is.na(A20)),1,0))
+  d_fmla <- d_fmla %>% mutate(take_bond = ifelse(A5_2_CAT==21 & (is.na(A11_2) == 1 | GENDER_CAT == 1 | (GENDER_CAT==2 & A11_2==2 & A5_2_CAT_REV!=32)) 
+                                                 & (A20 == 2 & is.na(A20)),1,take_bond))
   d_fmla <- d_fmla %>% mutate(take_bond = ifelse(is.na(A5_1_CAT) == 1, NA, take_bond))
   d_fmla <- d_fmla %>% mutate(take_bond = ifelse(is.na(take_bond) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0, take_bond))
   
@@ -330,7 +375,7 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(long_own = ifelse(long_reason == 1,1,0))
   d_fmla <- d_fmla %>% mutate(long_own = ifelse(is.na(long_own) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0,long_own))
   
-  d_fmla <- d_fmla %>% mutate(need_own = ifelse(B6_1_CAT == 1|B6_2_CAT == 1,1,0))
+  d_fmla <- d_fmla %>% mutate(need_own = ifelse(B6_1_CAT == 1,1,0))
   d_fmla <- d_fmla %>% mutate(need_own = ifelse(is.na(need_own)==1 & (LEAVE_CAT == 1 | LEAVE_CAT == 3),0,need_own))
   
   d_fmla <- d_fmla %>% mutate(type_own = ifelse((take_own == 1 | need_own == 1),1,0))
@@ -346,7 +391,7 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(long_illchild = ifelse(long_reason == 11,1,0))
   d_fmla <- d_fmla %>% mutate(long_illchild = ifelse(is.na(long_illchild) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0,long_illchild))
   
-  d_fmla <- d_fmla %>% mutate(need_illchild = ifelse(B6_1_CAT == 11|B6_2_CAT == 11,1,0))
+  d_fmla <- d_fmla %>% mutate(need_illchild = ifelse(B6_1_CAT == 11,1,0))
   d_fmla <- d_fmla %>% mutate(need_illchild = ifelse(is.na(need_illchild) == 1 & (LEAVE_CAT == 1 | LEAVE_CAT == 3),0,need_illchild))
   
   d_fmla <- d_fmla %>% mutate(type_illchild = ifelse((take_illchild == 1 | need_illchild == 1),1,0))
@@ -391,6 +436,13 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   if (save_csv==TRUE) {
     write.csv(d_fmla, file = "fmla_clean_2012.csv", row.names = FALSE)  
   }
+  # some testing code that can be removed from final version.
+  # leave_types <- c("own","illspouse","illchild","illparent","matdis","bond")
+  # d_fmla['leave_need']=rowSums(d_fmla[,paste('need',c("own","illspouse","illchild","illparent","matdis","bond"),sep="_")], na.rm=TRUE)
+  # d_fmla['leave_count']=rowSums(d_fmla[,paste('take',c("own","illspouse","illchild","illparent","matdis","bond"),sep="_")], na.rm=TRUE)
+  # test <- d_fmla %>% filter(leave_need>1 | leave_count >1)
+  # take_vars <- paste('take', leave_types,sep="_")
+  # need_vars <- paste('need', leave_types,sep="_")
   return(d_fmla)
 }
 
@@ -832,6 +884,7 @@ impute_cps_to_acs <- function(d_acs, d_cps){
     mutate(temp_size=ifelse(emp_size==5,sample(500:999, nrow(d_acs), replace=T),temp_size)) %>%
     mutate(temp_size=ifelse(emp_size==6,sample(1000:99999, nrow(d_acs), replace=T),temp_size)) %>%
     mutate(emp_size=temp_size) %>%
+    # clean up weeks worked variables
     mutate(weeks_worked_cat=weeks_worked) %>%
     mutate(weeks_worked=iweeks_worked)
   
@@ -850,56 +903,8 @@ impute_cps_to_acs <- function(d_acs, d_cps){
 # ============================ #
 # 4B. runOrdinalEstimate
 # ============================ #
-# MASS implementation, polr function
-# biggest problem with ordered logit currently is it is unweighted; can't use CPS weight without getting a non-convergence error
-runOrdinalEstimate <- function(d_train,d_test, formula, test_filt,train_filt, varname){
-  
-  # 
-  #   # OGLMX ordinal implementation - gives pretty non sensical results from my efforts
-  #   runOrdinal <- function(x,y,z){
-  #      results.ologit <- oglmx(as.formula(x), data = d_cps %>% filter_(y), weights=marsupwt)
-  #      pause()
-  #      return(estimate)
-  #   }
-  
-  # get estimates from training data
-  estimate <- polr(as.formula(formula), data = d_train %>% filter_(train_filt))
-  
-  #filter test data
-  d_filt <- d_test %>% filter_(test_filt)
-  
-  # ensure there is at least one row in test data set that needs imputing
-  if (!is.null(rownames(d_filt))) {
-    
-    # calculate score from ordinal model
-    model=estimate$coefficients
-    d_filt['var_score']=0
-    for (dem in names(model)) {
-      if (dem !='(Intercept)') { 
-        d_filt[is.na(d_filt[,dem]),dem]=0
-        d_filt[,'var_score']= d_filt[,'var_score'] + d_filt[,dem]*model[dem]
-      }
-    }
-    
-    # assign categorical variable based on ordinal cuts
-    cuts= estimate$zeta
-    cat_num= length(cuts)+1
-    d_filt[varname] <- 0
-    d_filt['rand']=runif(nrow(d_filt))
-    for (i in seq(cat_num)) {
-      if (i!=cat_num) {
-        d_filt <- d_filt %>% mutate(cumprob= var_score-cuts[i])
-        d_filt <- d_filt %>% mutate(cumprob2= exp(cumprob)/(1+exp(cumprob)))
-        d_filt[varname] <- with (d_filt, ifelse(get(varname)==0 & rand>=cumprob2,i,get(varname)))
-      }
-      else {
-        d_filt[varname] <- with (d_filt, ifelse(get(varname)==0,i,get(varname)))
-      }
-    }
-    d_filt <- d_filt[,c(varname, 'id')]
-    return(d_filt)
-  }
-}
+# see 3_impute_functions.R, function 1Bb
+
 
 # ============================ #
 # 5. sample_acs

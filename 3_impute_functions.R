@@ -21,12 +21,17 @@
 
 # 1. impute_fmla_to_acs
 # Modular imputation methods - can be swaped out for one another for FMLA to ACS imputation of:
-# take_* vars, unaffordable, prop_pay variables
+# take_* vars, resp_len, prop_pay variables
   # 1A. KNN1_scratch
   # 1B. logit_leave_method
       # 1Ba. runLogitImpute - used in hardcoded methods found elsewhere as well
+      # 1Bb. runOrdinalImpute - used in hardcoded methods found elsewhere as well
+      # 1Bc. runRandDraw - used in hardcoded methods found elsewhere as well
   # 1C. KNN_multi
   # 1D. Naive_Bayes
+  # 1E. ridge_class
+  # 1F. random_forest
+  # 1G. svm_impute
 
 # ============================ #
 # 1. impute_fmla_to_acs
@@ -35,30 +40,35 @@
 # Based on user-specified method, impute leave taking behavior in fmla to ACS
 # default is KNN1
 
-impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_method,xvars,kval) {
+impute_fmla_to_acs <- function(d_fmla, d_acs, impute_method,xvars,kval) {
   # d_fmla - modified fmla data set
-  # d_fmla_orig - unmodified fmla data set
   # d_acs - ACS data set
-  # leaveprogram - TRUE or FALSE. Presence or absence of a leave program. 
   # impute_method - method to use for imputation
   # xvars - dependent variables used by imputation method. Must be present and have same name in 
   #         both fmla and acs data sets.
   
   # ---------------------------------------------------------------------------------------------------------
   # A. Leave characteristics needed: leave taking behavior, proportion of income paid by employer,
-  #     whether leave was unaffordable or not
+  #     whether leave was affordable or not
   # ---------------------------------------------------------------------------------------------------------
   
   # -----------------Hard coded objects all methods must use-----------------------------------------------
   # yvars: the dependent vars that must be imputed by the selected method
   yvars <- c(own = "take_own", 
-              illspouse = "take_illspouse",
-              illchild = "take_illchild",
-              illparent = "take_illparent",
-              matdis = "take_matdis",
-              bond = "take_bond",
+             illspouse = "take_illspouse",
+             illchild = "take_illchild",
+             illparent = "take_illparent",
+             matdis = "take_matdis",
+             bond = "take_bond",
+             need_own = "need_own", 
+             need_illspouse = "need_illspouse",
+             need_illchild = "need_illchild",
+             need_illparent = "need_illparent",
+             need_matdis = "need_matdis",
+             need_bond = "need_bond",
               prop_pay = "prop_pay",
-              unaffordable= "unaffordable")
+              resp_len= "resp_len",
+             unaffordable = 'unaffordable')
   
   # filters: logical conditionals always applied to filter vraiable imputation 
   filts <- c(own = "TRUE",
@@ -67,8 +77,15 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
                    illparent = "TRUE",
                    matdis = "female == 1 & nochildren == 0",
                    bond = "nochildren == 0",
+                   need_own = "TRUE",
+                   need_illspouse = "nevermarried == 0 & divorced == 0",
+                   need_illchild = "TRUE",
+                   need_illparent = "TRUE",
+                   need_matdis = "female == 1 & nochildren == 0",
+                   need_bond = "nochildren == 0",
                    prop_pay="TRUE",
-                   unaffordable="TRUE")
+                   resp_len="TRUE",
+                  unaffordable = 'TRUE')
   
   # weight: if method uses FMLA weights, the weight variable to use
   weights <- c(own = "~ fixed_weight",
@@ -77,7 +94,14 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
               illparent = "~ weight",
               matdis = "~ fixed_weight",
               bond = "~ fixed_weight",
+              need_own = "~ fixed_weight",
+              need_illspouse = "~ fixed_weight",
+              need_illchild = "~ fixed_weight",
+              need_illparent = "~ weight",
+              need_matdis = "~ fixed_weight",
+              need_bond = "~ fixed_weight",
               prop_pay = '~ fixed_weight',
+              resp_len = "~ fixed_weight",
               unaffordable = "~ fixed_weight")
   
   # Save ACS and FMLA Dataframes at this point to document format that 
@@ -126,6 +150,33 @@ impute_fmla_to_acs <- function(d_fmla, d_fmla_orig, d_acs,leaveprogram, impute_m
     d_acs <- Naive_Bayes(d_test=d_acs, d_train=d_fmla, xvars=xvars, 
                          yvars=yvars, test_filts=filts, train_filts=filts, 
                          weights=weights)
+  }
+  
+  if (impute_method=="ridge_class") {
+    d_acs <- ridge_class(d_test=d_acs, d_train=d_fmla, xvars=xvars, 
+                         yvars=yvars, test_filts=filts, train_filts=filts, 
+                         weights=weights)
+  }
+  
+  if (impute_method=="random_forest") {
+    d_acs <- random_forest(d_test=d_acs, d_train=d_fmla, xvars=xvars, 
+                         yvars=yvars, test_filts=filts, train_filts=filts, 
+                         weights=weights)
+  }
+  
+  if (impute_method=="svm") {
+    d_acs <- svm_impute(d_test=d_acs, d_train=d_fmla, xvars=xvars, 
+                           yvars=yvars, test_filts=filts, train_filts=filts, 
+                           weights=weights)
+  }
+  
+  # This is a random leave assignment for comparison purposes.
+  # This is assigns leaves randomly based on the population mean for each var
+  # Done by running logit with no xvars
+  if (impute_method=="random") {
+    d_acs <- logit_leave_method(d_test=d_acs, d_train=d_fmla, xvars = "",
+                                yvars=yvars, test_filts=filts, train_filts=filts, 
+                                weights=weights, create_dummies=TRUE)
   }
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -193,8 +244,7 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars)
   } 
   
   # id var must be first variable of data
-  
-  # find distance
+    # find distance
   
   m_test <- as.matrix(test)
   m_train <-as.matrix(train)
@@ -236,21 +286,23 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars)
 # ============================ #
 # logit imputation of leave characteristics
 
-logit_leave_method <- function(d_test, d_train, xvars, yvars, test_filts, train_filts, 
+logit_leave_method <- function(d_test, d_train, xvars=NULL, yvars, test_filts, train_filts, 
                                weights, create_dummies) {
   
   # placeholder modification of xvars to follow Chris' specification in python
   # should be removed in final version
-  xvars <- c('age', 'agesq', 'male', 'wkhours', 'ltHS', 'BA', 'GradSch', 
-             'empgov_fed', 'empgov_st', 'empgov_loc',
-             'lnfaminc', 'black', 'asian', 'hisp', 'other',
-             'ndep_kid', 'ndep_old', 'nevermarried', 'partner',
-             'widowed', 'divorced', 'separated')
+  # xvars <- c('age', 'agesq', 'male', 'wkhours', 'ltHS', 'BA', 'GradSch', 
+  #            'empgov_fed', 'empgov_st', 'empgov_loc',
+  #            'lnfaminc', 'black', 'asian', 'hisp', 'other',
+  #            'ndep_kid', 'ndep_old', 'nevermarried', 'partner',
+  #            'widowed', 'divorced', 'separated')
   
   # population mean imputation for missing xvars in logit regression
-  for (i in xvars) {
-    d_train[is.na(d_train[,i]), i] <- 0
-    d_test[is.na(d_test[,i]), i] <- mean(d_test[,i], na.rm = TRUE)
+  if (!is.null(xvars)) {
+    for (i in xvars) {
+      d_train[is.na(d_train[,i]), i] <- 0
+      d_test[is.na(d_test[,i]), i] <- mean(d_test[,i], na.rm = TRUE)
+    }  
   }
   
   # remove prop_pay from lists as we need to use ordinal regression for it
@@ -262,10 +314,18 @@ logit_leave_method <- function(d_test, d_train, xvars, yvars, test_filts, train_
   # generate formulas for logistic regression
   # need formula strings to look something like "take_own ~ age + agesq + male + ..." 
   
-  formulas=c()
-  for (i in yvars) { 
-    formulas= c(formulas, 
-                paste(i, "~",  paste(xvars[1],'+', paste(xvars[2:length(xvars)] , collapse=" + "))))
+  if (!is.null(xvars)) {
+    formulas=c()
+    for (i in yvars) { 
+      formulas= c(formulas, 
+                  paste(i, "~",  paste(xvars[1],'+', paste(xvars[2:length(xvars)] , collapse=" + "))))
+    }
+  }
+  else {
+    formulas=c()
+    for (i in yvars) { 
+      formulas= c(formulas, paste(i, "~ 1"))
+    }
   }
   
   # create columns based on logit estimates  
@@ -274,7 +334,6 @@ logit_leave_method <- function(d_test, d_train, xvars, yvars, test_filts, train_
                        MoreArgs=list(d_train=d_train, d_test=d_test, create_dummies=TRUE), 
                        SIMPLIFY = FALSE)
 
-
   # merge imputed values into single data set
   for (i in sets) {
     d_test <- merge(i, d_test, by="id",all.y=TRUE)
@@ -282,9 +341,16 @@ logit_leave_method <- function(d_test, d_train, xvars, yvars, test_filts, train_
     d_test[is.na(d_test[colnames(i[2])]), colnames(i[2])] <- 0
   } 
   
+  # set formula
+  if (!is.null(xvars)) {
+    formula <- paste("factor(prop_pay) ~", paste(xvars[1],'+', paste(xvars[2:length(xvars)], collapse=" + ")))
+  }
+  else {
+    formula <- paste("factor(prop_pay) ~ 1")
+  }
+    
   # Do an ordinal logit imputation for prop_pay
-  d_filt <- runOrdinalEstimate(d_train=d_train,d_test=d_test, formula=paste("factor(prop_pay) ~",  
-                               paste(xvars[1],'+', paste(xvars[2:length(xvars)], collapse=" + "))),
+  d_filt <- runOrdinalEstimate(d_train=d_train,d_test=d_test, formula=formula,
                                test_filt="TRUE", train_filt="TRUE", varname='prop_pay')
   d_test <- merge(d_filt, d_test, by='id', all.y=TRUE)
   
@@ -310,14 +376,28 @@ logit_leave_method <- function(d_test, d_train, xvars, yvars, test_filts, train_
 runLogitEstimate <- function(d_train,d_test, formula, test_filt,train_filt, weight, 
                              varname, create_dummies){
   des <- svydesign(id = ~1,  weights = as.formula(weight), data = d_train %>% filter_(train_filt))
-  complete <- svyglm(as.formula(formula),data = d_train %>% filter_(train_filt),
+  complete <- svyglm(as.formula(formula), data = d_train %>% filter_(train_filt),
                      family = "quasibinomial",design = des)
   estimate <- complete$coefficients 
+  
+  # if making a log, record sample size of filtered data set
+  if (exists('makelog')) {
+    if ( makelog == TRUE) {
+      temp_filt = d_train %>% filter_(train_filt)
+      cat("", file = log_name, sep="\n", append = TRUE)
+      cat("------------------------------", file = log_name, sep="\n", append = TRUE)
+      cat(paste("Filtered FMLA Sample Size:", nrow(temp_filt)), file = log_name, sep="\n", append = TRUE)
+      cat(paste("Formula:", formula), file = log_name, sep="\n", append = TRUE)
+      cat(paste("Filter condition:", train_filt), file = log_name, sep="\n", append = TRUE)
+      cat("------------------------------", file = log_name, sep="\n", append = TRUE)
+      cat("", file = log_name, sep="\n", append = TRUE)
+    }
+  }
   var_prob= paste0(varname,"_prob")
   d_filt <- d_test %>% filter_(test_filt)
   d_filt[var_prob]=estimate['(Intercept)']
   for (dem in names(estimate)) {
-    if (dem !='(Intercept)') { 
+    if (dem !='(Intercept)' & !is.na(estimate[dem])) { 
       d_filt[is.na(d_filt[,dem]),dem]=0
       d_filt[var_prob]= d_filt[,var_prob] + d_filt[,dem]*estimate[dem]
     }
@@ -338,10 +418,186 @@ runLogitEstimate <- function(d_train,d_test, formula, test_filt,train_filt, weig
 }
 
 # ============================ #
+# 1Bb. runOrdinalEstimate
+# ============================ #
+# MASS implementation, polr function
+# biggest problem with ordered logit currently is it is unweighted; can't use CPS weight without getting a non-convergence error
+runOrdinalEstimate <- function(d_train,d_test, formula, test_filt,train_filt, varname){
+  
+  # 
+  #   # OGLMX ordinal implementation - gives pretty non sensical results from my efforts
+  #   runOrdinal <- function(x,y,z){
+  #      results.ologit <- oglmx(as.formula(x), data = d_cps %>% filter_(y), weights=marsupwt)
+  #      pause()
+  #      return(estimate)
+  #   }
+  
+  # get estimates from training data
+  estimate <- polr(as.formula(formula), data = d_train %>% filter_(train_filt))
+  
+  #filter test data
+  d_filt <- d_test %>% filter_(test_filt)
+  
+  # ensure there is at least one row in test data set that needs imputing
+  if (!is.null(rownames(d_filt))) {
+    
+    # calculate score from ordinal model
+    model=estimate$coefficients
+    d_filt['var_score']=0
+    for (dem in names(model)) {
+      if (dem !='(Intercept)') { 
+        d_filt[is.na(d_filt[,dem]),dem]=0
+        d_filt[,'var_score']= d_filt[,'var_score'] + d_filt[,dem]*model[dem]
+      }
+    }
+    
+    # assign categorical variable based on ordinal cuts
+    cuts= estimate$zeta
+    cat_num= length(cuts)+1
+    d_filt[varname] <- 0
+    d_filt['rand']=runif(nrow(d_filt))
+    for (i in seq(cat_num)) {
+      if (i!=cat_num) {
+        d_filt <- d_filt %>% mutate(cumprob= var_score-cuts[i])
+        d_filt <- d_filt %>% mutate(cumprob2= exp(cumprob)/(1+exp(cumprob)))
+        d_filt[varname] <- with (d_filt, ifelse(get(varname)==0 & rand>=cumprob2,i,get(varname)))
+      }
+      else {
+        d_filt[varname] <- with (d_filt, ifelse(get(varname)==0,i,get(varname)))
+      }
+    }
+    d_filt <- d_filt[,c(varname, 'id')]
+    return(d_filt)
+  }
+}
+
+# ============================ #
+# 1Bc. runRandDraw
+# ============================ #
+# run a random draw
+runRandDraw <- function(d_train,d_test,yvar,train_filt,test_filt, ext_resp_len, len_method) {
+  # filter training cases
+  d_temp <- d_train %>% filter_(train_filt)
+  train <- d_temp %>% filter(complete.cases(yvar))
+  
+  # log FMLA sample sizes
+  if (makelog == TRUE) {
+    cat("", file = log_name, sep="\n", append = TRUE)
+    cat("------------------------------", file = log_name, sep="\n", append = TRUE)
+    cat(paste("Filtered FMLA Sample Size:", nrow(train)), file = log_name, sep="\n", append = TRUE)
+    cat(paste("Formula: Random draw from variable",yvar), file = log_name, sep="\n", append = TRUE)
+    cat(paste("Filter condition:", train_filt), file = log_name, sep="\n", append = TRUE)
+    cat(paste("Weighted mean of var:",weighted.mean(train[,yvar], 
+                                                    train[,'weight'], na.rm = TRUE)), file = log_name, sep="\n", append = TRUE)
+    cat("------------------------------", file = log_name, sep="\n", append = TRUE)
+    cat("", file = log_name, sep="\n", append = TRUE)
+  }
+  
+  # filter test cases
+  test <- d_test %>% filter_(test_filt)
+  
+  # verify that mean_diffs are >1 in FMLA for all types (counterfact lengths should be greater
+  # than status quo)
+  # this is a check for when len_method == 'mean'
+  # mean_diff = mean(train %>% filter(resp_len == 0) %>% pull(yvar), na.rm=TRUE) -
+  #   mean(train %>% filter(resp_len == 1) %>% pull(yvar), na.rm=TRUE) 
+  # mean_ratio = mean(train %>% filter(resp_len == 0) %>% pull(yvar), na.rm=TRUE) /
+  #   mean(train %>% filter(resp_len == 1) %>% pull(yvar), na.rm=TRUE) 
+  # print(c(yvar, mean(train %>% filter(resp_len == 0) %>% pull(yvar), na.rm=TRUE), 
+  #         mean(train %>% filter(resp_len == 1) %>% pull(yvar), na.rm=TRUE), mean_ratio,
+  #         mean_diff))
+  
+  
+  if (nrow(test)==0) {
+    return()
+  }
+  
+  if (nrow(test)!=0) {
+    # random draw
+    if (!yvar %in% colnames(test)) {
+      test[yvar]=NA
+    }
+    
+    squo_var = paste0('squo_',yvar)
+    est_df <- data.frame(matrix(ncol = 3, nrow = 0))  
+    colnames(est_df) <- c('id', squo_var, yvar)
+    # status quo length
+    for (i in c('resp_len == 0', 'resp_len == 1')) {
+      temp_train <- train %>% filter_(i)
+      temp_test <- test %>% filter_(i)
+      if (nrow(temp_test)!= 0 & nrow(temp_train)!= 0 ) {
+        train_samp_restrict <- function(x) temp_train[sample(nrow(temp_train), 1), yvar]
+        temp_test[squo_var] <- apply(temp_test[yvar],1, train_samp_restrict)
+        est_df <- rbind(est_df, temp_test[c('id', squo_var)])
+      }
+    }
+    
+    
+    # changing counterfactual length option:
+    # for constrained individuals, draw length from unconstrained draws
+    if (ext_resp_len==TRUE) {
+      # for those with resp_len = 1, we draw leave length from 
+      # the unconstrained distribution of training leave lengths
+      temp_train <- train %>% filter(resp_len == 0)
+      temp_test <- test %>% filter(resp_len == 1)
+      temp_test <- merge(temp_test, est_df, by='id', all.x=TRUE)
+      # if these dataframes are not empty, we find the counterfactual lengths
+      if (nrow(temp_test)!= 0 & nrow(temp_train)!= 0 ) {
+        # mean method - find proportional difference of resp=1 and resp=0 mean, and multiply 
+        # status quo lengths by that factor.
+        if (len_method=='mean') {
+          train_samp_cfact <- function(x) {
+            if (nrow(temp_train %>% filter(get(yvar)>= x[squo_var]))!=0) {
+              data <- temp_train %>% filter(get(yvar)>= x[squo_var]) %>% select_(yvar, 'weight')
+              mean <- weighted.mean(x= data[ ,yvar], w= data[ , 'weight'])
+              return(round(mean))
+            }
+            else {
+              return(x[squo_var])
+            }            
+          }
+        }
+        
+        # random draw method - take random draw from training sample of lengths less than or equal to
+        # the counterfactual leave length
+        if (len_method=='rand') {
+          train_samp_cfact <- function(x) {
+            if (nrow(temp_train %>% filter(get(yvar)>= x[squo_var]))!=0) {
+              return(temp_train %>% filter(get(yvar)>= x[squo_var]) %>% sample_n(1, weight = weight) %>% select_(yvar))
+            }
+            else {
+              return(x[squo_var])
+            }
+          }
+        }
+        # adjust squo lengths by factor to get counterfact lengths for resp_len == 1
+        temp_test[yvar] <- data.frame(unlist(apply(temp_test, 1, train_samp_cfact)))
+        est_df <- merge(temp_test[c('id', yvar)], est_df, by='id', all.y=TRUE)  
+        
+        # for the rest, resp_len = 0 and so leave length does not respond to presence or absence of program, 
+        # so that variable remains the same
+        est_df[is.na(est_df[yvar]),yvar] <- est_df[is.na(est_df[yvar]),squo_var]
+      }
+      # if these dataframes are empty, then we only have resp_len = 0 in test and we make the cfact var the same
+      # as status quo: their leave length does not respond to presence or absence of program, 
+      else {
+        est_df[yvar] <- est_df[squo_var]
+      }
+    }
+    
+    # if option not used, status quo will start out the same as counterfactual.
+    if (ext_resp_len==FALSE) {
+      est_df[yvar] <- est_df[squo_var]
+    }
+    return(est_df) 
+  }
+}
+
+# ============================ #
 # 1C. KNN_multi
 # ============================ #
 # Define KNN matching method, but allowing multiple (k) neighbors 
-KNN_multi <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars, kval) { 
+KNN_multi <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars, kval=5) { 
   
   # starts the same way as KNN1_scratch
   
@@ -468,16 +724,249 @@ Naive_Bayes <- function(d_train, d_test, yvars, train_filts, test_filts, weights
 
   # predict each yvar 
   for (i in names(yvars)) {
-    
     # generate NB model from training data
-    d_train_filt <- d_train %>% filter(complete.cases(select(d_train, yvars[i], xvars))) %>% filter_(train_filts[i])  
-    model <- naiveBayes(x = d_train_filt[xvars], y = d_train_filt[yvars[i]])
+    ftrain <- d_train %>% filter(complete.cases(select(d_train, yvars[i], xvars))) %>% filter_(train_filts[i])  
+    model <- naiveBayes(x = ftrain[xvars], y = ftrain[yvars[i]])
     
     # apply model to test data 
-    d_test_filt <- d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i]) 
-    predict <- predict(object=model, newdata = d_test_filt)
-    browser()
-  }
+    ftest <- d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i]) 
 
+    impute <- as.data.frame(predict(object=model, newdata = ftest[xvars], type='raw'))
+    impute[yvars[i]] <- apply(impute, 1, FUN=which.min)
+    impute[yvars[i]] <- apply(impute[yvars[i]],1,function(x) colnames(impute)[x])
+    impute[yvars[i]] <- as.numeric(impute[,yvars[i]])
+    
+    # add imputed value to test data set
+    impute <- cbind(ftest['id'], impute)
+
+    d_test <- merge(d_test, impute[c('id', yvars[i])], by='id', all.x = TRUE)
+  }
   return(d_test)
+}
+
+# ============================ #
+# 1E. ridge_class
+# ============================ #
+# Ridge Classifier imputation function
+ridge_class <- function(d_train, d_test, yvars, train_filts, test_filts, weights, xvars) {
+  # generate formulas for Ridge Regression model
+  # need formula strings to look something like "take_own ~ age + agesq + male + ..." 
+  formulas <- c()
+  for (i in yvars) { 
+    formulas <- c(formulas, 
+                  paste(i, "~",  paste(xvars[1],'+', paste(xvars[2:length(xvars)] , collapse=" + "))))
+  }
+  names(formulas) <- names(yvars)
+  
+  # predict each yvar
+  
+  for (i in names(yvars)) {
+    # generate Ridge Regression model from training data
+    ftrain <- d_train %>% filter(complete.cases(select(d_train, yvars[i], xvars))) %>% filter_(train_filts[i])  
+    # normalize training data to equally weight differences between variables
+    for (j in xvars) {
+      if (sum(ftrain[j])!=0 ){
+        ftrain[j] <- scale(ftrain[j],center=0,scale=max(ftrain[,j]))
+      }
+    } 
+    
+    # check for xvars with all identical values. need to not use xvar if all values are the same in training 
+    # will return a column of NaN for svd() in the lm.ridge function
+    temp_xvars <- xvars
+    for (j in xvars) {
+      
+      if (dim(table(ftrain[,j])) == 1) {
+        temp_xvars <- temp_xvars[!temp_xvars %in% j]
+        formulas[i] <- paste(yvars[i], "~",  paste(temp_xvars[1],'+', paste(temp_xvars[2:length(temp_xvars)] 
+                                                                            , collapse=" + ")))
+      }
+    }
+    
+    # as prop_pay is categorical, we need to do ordinal version of ridge regression
+    # rest of the vars are handled in this loop
+    if (i!= 'prop_pay') {
+      
+      model <- lm.ridge(formula = formulas[i], data = ftrain[c(yvars[i], temp_xvars)])
+      
+      # TODO: getting a weighted version of ridge regression to work
+      
+      # apply model to test data
+      ftest <- d_test %>% filter(complete.cases(select(d_test, temp_xvars))) %>% filter_(test_filts[i]) 
+      
+      # normalize test data to equally weight differences between variables
+      for (j in temp_xvars) {
+        if (sum(ftest[j])!=0 ){
+          ftest[j] <- scale(ftest[j],center=0,scale=max(ftest[,j]))
+        }
+      }
+      # calculate probabilities of test data set
+      impute <- as.data.frame(as.matrix(cbind(constant=1,ftest[temp_xvars])) %*% coef(model))
+      colnames(impute) <- 'prob'
+      impute['rand'] <- runif(nrow(impute))
+      impute[yvars[i]] <- with(impute, ifelse(prob >= rand, 1, 0))
+      impute <- cbind(ftest['id'], impute)
+      d_test <- merge(d_test, impute[c('id', yvars[i])], by='id', all.x = TRUE)
+    }
+    # ordinal ridge regression for prop_pay
+    # can't find a package that does an ordinal implementation, so writing one from scratch here
+    # TODO: Not exactly ordinal in implementation right now, if there's time to revisit this could be done 
+    else {
+      # create dummies for each value of prop_pay
+      dums <- dummy(ftrain$prop_pay)
+      var_vals <- paste0('prop_pay_',sort(unlist(c(unique(ftrain['prop_pay'])))))
+      colnames(dums) <- var_vals
+      ftrain <- cbind(ftrain, dums)
+      
+      # prep test data
+      ftest <- d_test %>% filter(complete.cases(select(d_test, temp_xvars))) %>% filter_(test_filts[i]) 
+      # normalize test data to equally weight differences between variables
+      for (j in temp_xvars) {
+        if (sum(ftest[j])!=0 ){
+          ftest[j] <- scale(ftest[j],center=0,scale=max(ftest[,j]))
+        }
+      }
+      
+      for (j in var_vals) {
+        # run ridge regression on each dummy
+        formula <- paste(j, "~",  paste(temp_xvars[1],'+', paste(temp_xvars[2:length(temp_xvars)] 
+                                                                        , collapse=" + ")))
+        model <- lm.ridge(formula = formula, data = ftrain[c(j, temp_xvars)])  
+        
+        # apply model to test data to get probabilities of each level
+        impute <- as.data.frame(as.matrix(cbind(constant=1,ftest[temp_xvars])) %*% coef(model))
+        colnames(impute) <- j
+        impute <- cbind(ftest['id'], impute)
+        d_test <- merge(d_test, impute[c('id', j)], by='id', all.x = TRUE)
+      }
+      # normalize val probabilities to sum to 1
+      d_test['total'] = rowSums(d_test[var_vals])
+      for (j in var_vals) {
+        d_test[j] =  d_test[j]/d_test['total']
+      }
+      
+      # Play wheel of fortune with which prop_val to assign to each test obs
+      d_test['rand'] <- runif(nrow(d_test))
+      d_test['prop_pay'] <- NA
+      d_test['cum']=0
+      for (j in var_vals) {
+        pay_val <- as.numeric(gsub("prop_pay_", "", j))
+        d_test['prop_pay'] <- with(d_test, ifelse(rand > cum & rand<(cum + get(j)), pay_val, prop_pay))
+        d_test['cum']= d_test[,'cum'] + d_test[,j]
+      }
+      
+      # clean up columns 
+      d_test <- d_test[!colnames(d_test) %in% c(var_vals, 'rand', 'cum')]
+    }
+  }
+  return(d_test)
+}
+
+# ============================ #
+# 1F. random_forest
+# ============================ #
+
+
+# Random Forest imputation function
+random_forest <- function(d_train, d_test, yvars, train_filts, test_filts, weights, xvars) {
+  # generate formulas for Random Forest model
+  # need formula strings to look something like "take_own ~ age + agesq + male + ..." 
+  formulas <- c()
+  for (i in yvars) { 
+    formulas <- c(formulas, 
+                  paste(i, "~",  paste(xvars[1],'+', paste(xvars[2:length(xvars)] , collapse=" + "))))
+  }
+  names(formulas) <- names(yvars)
+  
+  # predict each yvar 
+  for (i in names(yvars)) {
+    # generate model from training data 
+    ftrain <- d_train %>% filter(complete.cases(select(d_train, yvars[i], xvars))) %>% filter_(train_filts[i])  
+    model <- randomForest(x = ftrain[xvars], y = factor(ftrain[,yvars[i]]))
+    # apply model to test data 
+    ftest <- d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i]) 
+    impute <- as.data.frame(predict(object=model, newdata = ftest[xvars], type='prob'))
+  
+    # play wheel of fortune with predicted probabilities to get imputed value
+    impute['rand'] <- runif(nrow(impute))
+    # do this differently for prop_pay as a non-binary categorical var
+    if (i=='prop_pay'){
+      impute['prop_pay'] <- NA
+      impute['cum']=0
+      var_vals <- sapply(unname(sort(unlist(c(unique(ftrain['prop_pay']))))),toString)
+      for (j in var_vals) {
+        impute['prop_pay'] <- with(impute, ifelse(rand > cum & rand<(cum + get(j)), j, prop_pay))
+        impute['cum']= impute[,'cum'] + impute[,j]
+      }
+      impute['prop_pay'] <- as.numeric(impute[,'prop_pay'])
+    }
+    # rest of vars are binary
+    else {
+      impute[yvars[i]] <- as.data.frame(ifelse(impute[2]>impute['rand'],1,0))  
+    }
+    
+    # add imputed value to test data set
+    impute <- cbind(ftest['id'], impute)
+    
+    d_test <- merge(d_test, impute[c('id', yvars[i])], by='id', all.x = TRUE)
+  }
+  return(d_test) 
+}
+
+
+# ================================ #
+# 1G. Support Vector Machine
+# ================================ #
+# SVM Imputation Function
+# Functional, but produces pretty bizarre results. Never predicts leave 
+svm_impute <- function(d_train, d_test, yvars, train_filts, test_filts, weights, xvars) {
+  # generate formulas for model
+  # need formula strings to look something like "take_own ~ age + agesq + male + ..." 
+  formulas <- c()
+  for (i in yvars) { 
+    formulas <- c(formulas, 
+                  paste(i, "~",  paste(xvars[1],'+', paste(xvars[2:length(xvars)] , collapse=" + "))))
+  }
+  names(formulas) <- names(yvars)
+  
+  # predict each yvar 
+  for (i in names(yvars)) {
+    
+    # generate model from training data 
+    ftrain <- d_train %>% filter(complete.cases(select(d_train, yvars[i], xvars))) %>% filter_(train_filts[i])  
+    # normalize training data to equally weight differences between variables
+    for (j in xvars) {
+      if (sum(ftrain[j])!=0 ){
+        ftrain[j] <- scale(ftrain[j],center=0,scale=max(ftplotrain[,j]))
+      }
+    } 
+    # check for xvars with all identical values. need to not use xvar if all values are the same in training 
+    # will return a column of NaN for svd() in the lm.ridge function
+    temp_xvars <- xvars
+    for (j in xvars) {
+      if (dim(table(ftrain[,j])) == 1) {
+        temp_xvars <- temp_xvars[!temp_xvars %in% j]
+        formulas[i] <- paste(yvars[i], "~",  paste(temp_xvars[1],'+', paste(temp_xvars[2:length(temp_xvars)] 
+                                                                            , collapse=" + ")))
+      }
+    }  
+    model <- svm(x = ftrain[temp_xvars], y = factor(ftrain[,yvars[i]]), scale = FALSE)
+    # apply model to test data 
+    ftest <- d_test %>% filter(complete.cases(select(d_test, temp_xvars))) %>% filter_(test_filts[i]) 
+    # normalize test data to equally weight differences between variables
+    for (j in temp_xvars) {
+      if (sum(ftest[j])!=0 ){
+        ftest[j] <- scale(ftest[j],center=0,scale=max(ftest[,j]))
+      }
+    }
+    impute <- as.data.frame(unfactor(predict(object=model, newdata = ftest[temp_xvars])))
+    colnames(impute)[1] <- yvars[i]
+    if (i=='prop_pay'){
+      #browser()
+    }
+
+    # add imputed value to test data set
+    impute <- cbind(ftest['id'], impute)
+    d_test <- merge(d_test, impute[c('id', yvars[i])], by='id', all.x = TRUE)
+  }
+  return(d_test) 
 }

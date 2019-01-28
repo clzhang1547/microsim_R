@@ -21,7 +21,6 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. impute_intra_fmla
   # 1A. runLogitEstimate - see 3_impute_functions.R, function 1Ba
-# 2. LEAVEPROGRAM
 # 3. acs_filtering
 
 # ============================ #
@@ -34,7 +33,7 @@
 # We will impute the other leave types taken based on logit model from ACM
 
 
-impute_intra_fmla <- function(d_fmla) {
+impute_intra_fmla <- function(d_fmla, intra_impute) {
   # intra-fmla imputation for additional leave taking and lengths
   # This is modifying take_ and need_ vars for those with additional leaves
   
@@ -164,25 +163,6 @@ impute_intra_fmla <- function(d_fmla) {
   temp_func("need")
 
   return(d_fmla)
-}
-
-# ============================ #
-# 2. LEAVEPROGRAM
-# ============================ #
-# Baseline changes for addition of a leave program
-# follows baseline changes of ACM model (see p.11 of ACM model description paper). Main change needed to base cleaning:
-#   Leave needers who did not take a leave in the absence of a program, and
-#   who said the reason that they did not take a leave was because they could not afford to
-#   take one, take a leave in the presence of a program.
-
-LEAVEPROGRAM <- function(d) {
-  for (i in leave_types) {
-    take_var=paste0("take_",i)
-    need_var=paste0("need_",i)
-    d[,take_var] <- ifelse(d[,"unaffordable"]==1 & d[,need_var]==1 & !is.na(d[,'unaffordable']) & !is.na(d[,need_var]),1,d[,take_var])
-  }
-  
-  return(d)
 }
 
 # ============================ #
