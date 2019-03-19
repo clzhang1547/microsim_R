@@ -20,8 +20,12 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               kval= 3,
                               makelog=TRUE,
                               xvars=c("widowed", "divorced", "separated", "nevermarried", "female", 
-                                         "agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
-                                         "white", "asian", "hisp","nochildren"),
+                                         'age',"agesq", "ltHS", "someCol", "BA", "GradSch", "black", 
+                                         "other", "asian",'native', "hisp","nochildren",'faminc','coveligd'),
+                              # should think about how to add faminc to xvars
+                              # xvars weight parameter - how to weight xvars for those methods that it is relevant for [NEED TO ADD to PARAM DICT]
+                              # default is 1's for everything
+                              xvar_wgts = rep(1,length(xvars)),
                               base_bene_level=1, topoff_rate=0, topoff_minlength=0, sample_prop=NULL, sample_num=NULL,
                               bene_effect=FALSE, dependent_allow=0, full_particip_needer=FALSE, 
                               own_uptake=.25, matdis_uptake=.25, bond_uptake=.25, 
@@ -31,6 +35,8 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
                               clone_factor=0, sens_var = 'resp_len', progalt_post_or_pre ='post',
                               ext_resp_len = FALSE, len_method = 'mean',
                               intra_impute = TRUE,
+                              place_of_work = FALSE,
+                              state = '',
                               ext_base_effect=TRUE, extend_prob=0, extend_days=0, extend_prop=1,
                               maxlen_own =60, maxlen_matdis =60, maxlen_bond =60, maxlen_illparent =60, maxlen_illspouse =60, maxlen_illchild =60,
                               maxlen_PFL=maxlen_illparent+maxlen_illspouse+maxlen_illchild+maxlen_bond, maxlen_DI=maxlen_bond+maxlen_matdis,
@@ -151,11 +157,16 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   
   # sample ACS
   # user option to sample ACS data
-  if (!is.null(sample_prop)|!is.null(sample_num)) {
-    d_acs <- sample_acs(d_acs, sample_prop=NULL, sample_num=NULL)  
+  if (!is.null(sample_prop) & is.null(sample_num)) {
+    d_acs <- sample_acs(d_acs, sample_prop=sample_prop, sample_num=NULL)  
   }
-  
-  
+  if (is.null(sample_prop) & !is.null(sample_num)) {
+    d_acs <- sample_acs(d_acs, sample_prop=NULL, sample_num=sample_num)  
+  }
+  if (!is.null(sample_prop) & !is.null(sample_num)) {
+    d_acs <- sample_acs(d_acs, sample_prop=sample_prop, sample_num=sample_num)  
+  }
+
   #========================================
   # 2. Pre-imputation 
   #========================================
@@ -191,14 +202,14 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   #-----FMLA to ACS Imputation-----
   # filter/modify ACS data based on user specifications
   # INPUT: ACS Data
-  d_acs <- acs_filtering(d_acs, weightfactor, FEDGOV, STATEGOV, LOCALGOV, SELFEMP)
+  d_acs <- acs_filtering(d_acs, weightfactor, place_of_work, state)
   # OUTPUT: Filtered ACS data
 
   # default is just simple nearest neighbor, K=1 
   # This is the big beast of getting leave behavior into the ACS.
   # INPUT: cleaned acs/fmla data, method for imputation, dependent variables 
   #         used for imputation
-  d_acs_imp <- impute_fmla_to_acs(d_fmla,d_acs, impute_method, xvars, kval)  
+  d_acs_imp <- impute_fmla_to_acs(d_fmla,d_acs, impute_method, xvars, kval, xvar_wgts)  
   # OUTPUT: ACS data with imputed values for a) leave taking and needing, b) proportion of pay received from
   #         employer while on leave, and c) whether leave needed was not taken due to unaffordability 
 
@@ -248,7 +259,8 @@ policy_simulation <- function(fmla_csv, acs_house_csv, acs_person_csv, cps_csv, 
   # Program eligibility and uptake functions
   # INPUT: ACS file
   d_acs_imp <-ELIGIBILITYRULES(d_acs_imp, earnings, weeks, ann_hours, minsize, base_bene_level, week_bene_min,
-                               formula_prop_cuts, formula_value_cuts, formula_bene_levels, elig_rule_logic) 
+                               formula_prop_cuts, formula_value_cuts, formula_bene_levels, elig_rule_logic,
+                               FEDGOV, STATEGOV, LOCALGOV, SELFEMP) 
   # OUTPUT: ACS file with program eligibility and base program take-up indicators
   
   # Option to extend leaves under leave program 

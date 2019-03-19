@@ -169,26 +169,29 @@ impute_intra_fmla <- function(d_fmla, intra_impute) {
 # 3. ACS Filtering
 # ============================ #
 # Apply filters and modifications to ACS data based on user inputs
-acs_filtering <- function(d, weightfactor, FEDGOV, STATEGOV, LOCALGOV, SELFEMP) {
+acs_filtering <- function(d, weightfactor, place_of_work, state) {
   
   if (weightfactor!=1) {
     d$PWGTP=d$PWGTP*weightfactor
   }  
   
-  if (FEDGOV==FALSE) {
-    d <- d %>% filter(COW!=5)  
+  # apply state filters
+  if (state!='') {
+
+    if (place_of_work==FALSE) {
+      # merge in state abbreviations
+      state_codes <- read.csv(paste0("./csv_inputs/ACS_state_codes.csv"))
+      d <- merge(d,state_codes, by="ST",all.x=TRUE)  
+      d <- d %>% filter(state_abbr==state)
+    }
+    if (place_of_work==TRUE) {
+      # merge in state abbreviations
+      state_codes <- read.csv(paste0("./csv_inputs/ACS_state_codes.csv"))
+      state_codes["POWSP"] <- state_codes["ST"]  
+      d <- merge(d,state_codes, by="POWSP",all.x=TRUE)  
+      d <- d %>% filter(state_abbr==state)
+    }
   }
 
-  if (STATEGOV==FALSE) {
-    d <- d %>% filter(COW!=4)  
-  }
-  
-  if (LOCALGOV==FALSE) {
-    d <- d %>% filter(COW!=3)  
-  }
-  
-  if (SELFEMP==FALSE) {
-    d <- d %>% filter(COW!=6 & COW!=7)  
-  }
   return(d)
 }

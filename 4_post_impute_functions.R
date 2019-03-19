@@ -237,7 +237,7 @@ PAY_SCHEDULE <- function(d) {
 
 ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, ann_hours=NULL, minsize=NULL, 
                              base_bene_level, week_bene_min, formula_prop_cuts=NULL, formula_value_cuts=NULL,
-                             formula_bene_levels=NULL, elig_rule_logic) {
+                             formula_bene_levels=NULL, elig_rule_logic, FEDGOV, STATEGOV, LOCALGOV, SELFEMP) {
   
   # ----- apply eligibility rules logic to calculate initial participation ---------------
   # TODO: This should be redone in a more simple fashion once the input expected from the GUI is hammered out.
@@ -256,6 +256,25 @@ ELIGIBILITYRULES <- function(d, earnings=NULL, weeks=NULL, ann_hours=NULL, minsi
   
   # create elig_worker flag based on elig_rule_logic
   d <- d %>% mutate(eligworker= ifelse(eval(parse(text=elig_rule_logic)), 1,0))
+  
+  # apply government worker filters
+  if (FEDGOV==FALSE) {
+    d <- d %>% mutate(eligworker = ifelse(COW==5,0,eligworker)) 
+  }
+  
+  if (STATEGOV==FALSE) {
+    d <- d %>% mutate(eligworker = ifelse(COW==4,0,eligworker))
+  }
+  
+  if (LOCALGOV==FALSE) {
+    d <- d %>% mutate(eligworker = ifelse(COW==3,0,eligworker))
+  }
+  
+  # apply self employment filter
+  if (SELFEMP==FALSE) {
+    d <- d %>% mutate(eligworker = ifelse(COW==6 | COW==7,0,eligworker))
+  }
+  
   
   # ------ benefit calc --------------
   # if formulary benefits are not specificed, everyone will simply receive base_bene_level

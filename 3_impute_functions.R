@@ -31,7 +31,7 @@
   # 1D. Naive_Bayes
   # 1E. ridge_class
   # 1F. random_forest
-  # 1G. svm_impute
+  # 1G. svm_impute - Gets bad results right now
 
 # ============================ #
 # 1. impute_fmla_to_acs
@@ -40,7 +40,7 @@
 # Based on user-specified method, impute leave taking behavior in fmla to ACS
 # default is KNN1
 
-impute_fmla_to_acs <- function(d_fmla, d_acs, impute_method,xvars,kval) {
+impute_fmla_to_acs <- function(d_fmla, d_acs, impute_method,xvars,kval,xvar_wgts) {
   # d_fmla - modified fmla data set
   # d_acs - ACS data set
   # impute_method - method to use for imputation
@@ -115,7 +115,7 @@ impute_fmla_to_acs <- function(d_fmla, d_acs, impute_method,xvars,kval) {
     # INPUTS: variable to be imputed, conditionals to filter training and test data on, FMLA data (training), and
     #         ACS data (test), id variable, and dependent variables to use in imputation
     impute <- mapply(KNN1_scratch, imp_var=yvars,train_filt=filts, test_filt=filts,
-                        MoreArgs=list(d_train=d_fmla,d_test=d_acs,xvars=xvars), SIMPLIFY = FALSE)
+                        MoreArgs=list(d_train=d_fmla,d_test=d_acs,xvars=xvars, xvar_wgts = xvar_wgts), SIMPLIFY = FALSE)
     # OUTPUTS: list of data sets for each leave taking/other variables requiring imputation. 
    # merge imputed values with acs data
     for (i in impute) {
@@ -196,7 +196,7 @@ impute_fmla_to_acs <- function(d_fmla, d_acs, impute_method,xvars,kval) {
 # ============================ #
 # Define KNN1 matching method
 
-KNN1_scratch <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars) { 
+KNN1_scratch <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars, xvar_wgts) { 
   
   # This returns a dataframe of length equal to acs with the employee id and a column for each leave type
   # that indicates whether or not they took the leave.
@@ -230,16 +230,17 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars)
   }
   
   
-  # normalize training data to equally weight differences between variables
+  # normalize training data to weight differences between variables
+  names(xvar_wgts) <- xvars
   for (i in colnames(train)) {
     if (i != 'nbor_id' & i != imp_var & sum(train[i])!=0 ){
-      train[i] <- scale(train[i],center=0,scale=max(train[,i]))
+      train[i] <- scale(train[i],center=0,scale=max(train[,i])/xvar_wgts[[i]])
     }
   } 
   
   for (i in colnames(test)) {
     if (i != 'id' & sum(test[i])!=0 ){
-      test[i] <- scale(test[i],center=0,scale=max(test[,i]))
+      test[i] <- scale(test[i],center=0,scale=max(test[,i])/xvar_wgts[[i]])
     }
   } 
   
@@ -298,7 +299,7 @@ logit_leave_method <- function(d_test, d_train, xvars=NULL, yvars, test_filts, t
   #            'widowed', 'divorced', 'separated')
   
   # population mean imputation for missing xvars in logit regression
-  if (!is.null(xvars)) {
+  if (xvars[1]!="") {
     for (i in xvars) {
       d_train[is.na(d_train[,i]), i] <- 0
       d_test[is.na(d_test[,i]), i] <- mean(d_test[,i], na.rm = TRUE)
@@ -314,7 +315,7 @@ logit_leave_method <- function(d_test, d_train, xvars=NULL, yvars, test_filts, t
   # generate formulas for logistic regression
   # need formula strings to look something like "take_own ~ age + agesq + male + ..." 
   
-  if (!is.null(xvars)) {
+  if (xvars[1]!="") {
     formulas=c()
     for (i in yvars) { 
       formulas= c(formulas, 
@@ -342,7 +343,7 @@ logit_leave_method <- function(d_test, d_train, xvars=NULL, yvars, test_filts, t
   } 
   
   # set formula
-  if (!is.null(xvars)) {
+  if (xvars[1]!="") {
     formula <- paste("factor(prop_pay) ~", paste(xvars[1],'+', paste(xvars[2:length(xvars)], collapse=" + ")))
   }
   else {
@@ -730,7 +731,6 @@ Naive_Bayes <- function(d_train, d_test, yvars, train_filts, test_filts, weights
     
     # apply model to test data 
     ftest <- d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i]) 
-
     impute <- as.data.frame(predict(object=model, newdata = ftest[xvars], type='raw'))
     impute[yvars[i]] <- apply(impute, 1, FUN=which.min)
     impute[yvars[i]] <- apply(impute[yvars[i]],1,function(x) colnames(impute)[x])
