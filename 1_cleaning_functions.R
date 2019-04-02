@@ -74,7 +74,7 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(union = ifelse(D3 == 1,1,0))
   
   # age at midpoint of category
-  d_fmla <- d_fmla %>% mutate(age = ifelse(AGE_CAT == 1,21,AGE_CAT))
+  d_fmla <- d_fmla %>% mutate(age = ifelse(AGE_CAT == 1,21,NA))
   d_fmla <- d_fmla %>% mutate(age = ifelse(AGE_CAT == 2,27,age))
   d_fmla <- d_fmla %>% mutate(age = ifelse(AGE_CAT == 3,32,age))
   d_fmla <- d_fmla %>% mutate(age = ifelse(AGE_CAT == 4,37,age))
@@ -86,6 +86,11 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(age = ifelse(AGE_CAT == 10,70,age))
   d_fmla <- d_fmla %>% mutate(agesq = age^2)
   
+  # make a coarser categorical age var
+  d_fmla <- d_fmla %>% mutate(age_cat = ifelse(AGE_CAT >= 1 & AGE_CAT <= 4 , 1,NA))
+  d_fmla <- d_fmla %>% mutate(age_cat = ifelse(AGE_CAT >= 5 & AGE_CAT <= 7, 2,age_cat))
+  d_fmla <- d_fmla %>% mutate(age_cat = ifelse(AGE_CAT >= 8, 3,age_cat))
+                                
   # government employment
   d_fmla <- d_fmla %>% mutate(empgov_fed = ifelse(D2 == 1,1,0))
   d_fmla <- d_fmla %>% mutate(empgov_st = ifelse(D2 == 2,1,0))
@@ -122,6 +127,11 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(faminc = ifelse(D4_CAT == 9,87500,faminc))
   d_fmla <- d_fmla %>% mutate(faminc = ifelse(D4_CAT == 10,130000,faminc))
   d_fmla <- d_fmla %>% mutate(lnfaminc = log(faminc))
+  
+  # Make more coarse categores
+  d_fmla <- d_fmla %>% mutate(faminc_cat = ifelse(D4_CAT >= 3 & D4_CAT <= 5 , 1,NA))
+  d_fmla <- d_fmla %>% mutate(faminc_cat = ifelse(D4_CAT >= 6 & D4_CAT <= 8, 2,faminc_cat))
+  d_fmla <- d_fmla %>% mutate(faminc_cat = ifelse(D4_CAT >= 9, 3,faminc_cat))
   
   # marital status
   d_fmla <- d_fmla %>%  mutate(married = ifelse(D10 == 1,1,0),
@@ -440,17 +450,18 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(length_illparent = ifelse(take_illparent==1,length, 0))
   d_fmla <- d_fmla %>% mutate(longlength_illparent = ifelse(long_illparent==1,long_length, 0))
   
+  # taking or needing any leave
+  leave_types <- c("own","illspouse","illchild","illparent","matdis","bond")
+  d_fmla['taker']=rowSums(d_fmla[,paste('take',c("own","illspouse","illchild","illparent","matdis","bond"),sep="_")], na.rm=TRUE)
+  d_fmla['needer']=rowSums(d_fmla[,paste('need',c("own","illspouse","illchild","illparent","matdis","bond"),sep="_")], na.rm=TRUE)
+  d_fmla <- d_fmla %>% mutate(taker=ifelse(taker>=1, 1, 0))
+  d_fmla <- d_fmla %>% mutate(needer=ifelse(needer>=1, 1, 0))
+  
   # saving data
   if (save_csv==TRUE) {
     write.csv(d_fmla, file = "fmla_clean_2012.csv", row.names = FALSE)  
   }
-  # some testing code that can be removed from final version.
-  # leave_types <- c("own","illspouse","illchild","illparent","matdis","bond")
-  # d_fmla['leave_need']=rowSums(d_fmla[,paste('need',c("own","illspouse","illchild","illparent","matdis","bond"),sep="_")], na.rm=TRUE)
-  # d_fmla['leave_count']=rowSums(d_fmla[,paste('take',c("own","illspouse","illchild","illparent","matdis","bond"),sep="_")], na.rm=TRUE)
-  # test <- d_fmla %>% filter(leave_need>1 | leave_count >1)
-  # take_vars <- paste('take', leave_types,sep="_")
-  # need_vars <- paste('need', leave_types,sep="_")
+  
   return(d_fmla)
 }
 
@@ -518,6 +529,21 @@ clean_acs <-function(d,d_hh,save_csv=FALSE) {
   
   #age
   d$agesq <- d$age ** 2
+  
+  # coarse age categories
+  d <- d %>% mutate(age_cat = ifelse(age <= 39,1,NA))
+  d <- d %>% mutate(age_cat = ifelse(age <= 59 & age >= 40,2,age_cat))
+  d <- d %>% mutate(age_cat = ifelse(age >= 60, 3,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 18 & age >= 24,21,NA))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 25 & age >=29,27,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 30 & age >=34,32,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 35 & age >=39,37,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 40 & age >=44,42,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 45 & age >=49,47,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 50 & age >=54,52,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 55 & age >=59,57,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age <= 60 & age >=67,63.5,age_cat))
+  # d <- d %>% mutate(age_cat = ifelse(age >= 68 ,70,age_cat))
   
   # ed level
   d <- d %>% mutate(SCHL=ifelse(is.na(SCHL),0,SCHL)) 
@@ -621,6 +647,12 @@ clean_acs <-function(d,d_hh,save_csv=FALSE) {
   d <- d %>% mutate(wage12=WAGP*(ADJINC/1042852))
   d <- d %>% mutate(lnearn=ifelse(wage12>0, log(wage12), NA))
   
+  # family income
+  # Make more coarse categores
+  d <- d %>% mutate(faminc_cat = ifelse(faminc <= 34999,1,NA))
+  d <- d %>% mutate(faminc_cat = ifelse(faminc <= 74999 & faminc >= 35000,2,faminc_cat))
+  d <- d %>% mutate(faminc_cat = ifelse(faminc >= 87500, 3,faminc_cat))
+  
   # presence of children
   d <- d %>% mutate(fem_cu6= ifelse(PAOC==1,1,0))
   d <- d %>% mutate(fem_c617= ifelse(PAOC==2,1,0))
@@ -637,7 +669,7 @@ clean_acs <-function(d,d_hh,save_csv=FALSE) {
            "occ_4", "occ_5", "occ_6", "occ_7", "occ_8", "occ_9", "occ_10", "ind_1", "ind_2", "ind_3", "ind_4", 
            "ind_5", "ind_6", "ind_7", "ind_8", "ind_9", "ind_10", "ind_11", "ind_12", "ind_13", "weeks_worked",
            "WAGP","WKHP","PWGTP", replicate_weights,"FER", "WKW","COW","ESR","partner","ndep_kid","ndep_old",'empgov_fed','empgov_st',
-           'wkhours', 'empgov_loc', 'ST','POWSP')]
+           'wkhours', 'empgov_loc', 'ST','POWSP','age_cat','faminc_cat')]
 
   # id variable
   d$id <- as.numeric(rownames(d))

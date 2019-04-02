@@ -162,6 +162,12 @@ impute_intra_fmla <- function(d_fmla, intra_impute) {
   # second run: perform same operations on need_* variables
   temp_func("need")
 
+  # recalculate taker and needer vars
+  d_fmla['taker']=rowSums(d_fmla[,paste('take',c("own","illspouse","illchild","illparent","matdis","bond"),sep="_")], na.rm=TRUE)
+  d_fmla['needer']=rowSums(d_fmla[,paste('need',c("own","illspouse","illchild","illparent","matdis","bond"),sep="_")], na.rm=TRUE)
+  d_fmla <- d_fmla %>% mutate(taker=ifelse(taker>=1, 1, 0))
+  d_fmla <- d_fmla %>% mutate(needer=ifelse(needer>=1, 1, 0))
+  
   return(d_fmla)
 }
 

@@ -216,7 +216,7 @@ KNN1_scratch <- function(d_train, d_test, imp_var, train_filt, test_filt, xvars,
   test <- d_test %>% filter_(test_filt) %>%
     select(id, xvars) %>%
     filter(complete.cases(.))
-  
+
   # Initial checks
   
   # check for data frames
@@ -722,24 +722,64 @@ Naive_Bayes <- function(d_train, d_test, yvars, train_filts, test_filts, weights
                 paste(i, "~",  paste(xvars[1],'+', paste(xvars[2:length(xvars)] , collapse=" + "))))
   }
   names(formulas) <- names(yvars)
-
+  
+  # ---- Using WANBIA weights
+  # from -> https://rdrr.io/cran/bnclassify/src/R/learn-params-wanbia.R 
+  
   # predict each yvar 
   for (i in names(yvars)) {
-    # generate NB model from training data
-    ftrain <- d_train %>% filter(complete.cases(select(d_train, yvars[i], xvars))) %>% filter_(train_filts[i])  
-    model <- naiveBayes(x = ftrain[xvars], y = ftrain[yvars[i]])
+    # # generate NB model from training data
+    w_train <- as.data.frame(sapply(d_train %>% filter(complete.cases(select(d_train, yvars[[i]], xvars))) 
+                                    %>% filter_(train_filts[i]) %>% select(xvars, yvars[[i]]), as.factor))
+    
+    #wanbia <- compute_wanbia_weights('prop_pay', as.data.frame(sapply(w_train, as.factor))) 
+    wanbia <- bnc(dag_learner = 'nb',class=yvars[[i]], dataset=w_train,smooth=0,wanbia=TRUE) 
+    
     
     # apply model to test data 
-    ftest <- d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i]) 
-    impute <- as.data.frame(predict(object=model, newdata = ftest[xvars], type='raw'))
-    impute[yvars[i]] <- apply(impute, 1, FUN=which.min)
-    impute[yvars[i]] <- apply(impute[yvars[i]],1,function(x) colnames(impute)[x])
-    impute[yvars[i]] <- as.numeric(impute[,yvars[i]])
+    w_test <- as.data.frame(sapply(d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i])%>% select(xvars),as.factor))
+    
+    # make sure that testing and training sets have same factor levels
+    for (j in xvars) {
+      if (!all(levels(w_train[,c(j)]) %in% levels(w_test[,c(j)]))) {
+        levels(w_test[,c(j)]) = levels(w_train[,c(j)])
+      }
+    }
+    
+    w_test_ids <- d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i])%>% select(id)
+    wanbia_imp <- as.data.frame(predict(object=wanbia, newdata = w_test, prob=TRUE)) 
+    
+    # old version of NB impute; not done correctly
+    # ftrain <- d_train %>% filter(complete.cases(select(d_train, yvars[i], xvars))) %>% filter_(train_filts[i])  
+    # model <- naiveBayes(x = ftrain[xvars], y = ftrain[yvars[i]])
+
+    # ftest <- d_test %>% filter(complete.cases(select(d_test, xvars))) %>% filter_(test_filts[i]) 
+    # impute <- as.data.frame(predict(object=model, newdata = ftest[xvars], type='raw'))
+    # impute[yvars[i]] <- apply(impute, 1, FUN=which.min)
+    # impute[yvars[i]] <- apply(impute[yvars[i]],1,function(x) colnames(impute)[x])
+    # impute[yvars[i]] <- as.numeric(impute[,yvars[i]])
+    
+    # Play wheel of fortune with which prop_val to assign to each test obs
+    wanbia_imp['rand'] <- runif(nrow(wanbia_imp))
+    if (i == 'prop_pay') {
+      wanbia_imp['prop_pay'] <- NA
+      wanbia_imp['cum']=0
+      var_vals <- sapply(unname(sort(unlist(c(unique(w_train['prop_pay']))))),toString)
+      for (j in var_vals) {
+        wanbia_imp['prop_pay'] <- with(wanbia_imp, ifelse(rand > cum & rand<(cum + get(j)), j, prop_pay))
+        wanbia_imp['cum']= wanbia_imp[,'cum'] + wanbia_imp[,j]
+      }
+      wanbia_imp['prop_pay'] <- as.numeric(wanbia_imp[,'prop_pay'])
+    }
+    else {
+      wanbia_imp[yvars[[i]]] <- as.data.frame(ifelse(wanbia_imp[2]>wanbia_imp['rand'],1,0)) 
+      #browser()
+    }
     
     # add imputed value to test data set
-    impute <- cbind(ftest['id'], impute)
+    wanbia_imp <- cbind(w_test_ids['id'], wanbia_imp)
 
-    d_test <- merge(d_test, impute[c('id', yvars[i])], by='id', all.x = TRUE)
+    d_test <- merge(d_test, wanbia_imp[c('id', yvars[[i]])], by='id', all.x = TRUE)
   }
   return(d_test)
 }
