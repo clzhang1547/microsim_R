@@ -202,6 +202,11 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   
   d_fmla <- d_fmla %>% mutate(hospital1 = ifelse(is.na(LEAVE_CAT) == FALSE & LEAVE_CAT == 2, hospital_need, hospital_take))
   d_fmla <- d_fmla %>% mutate(hospital2 = ifelse(is.na(LEAVE_CAT) == FALSE & (LEAVE_CAT == 2 | LEAVE_CAT == 4), hospital_need, hospital_take))  
+  # [cz] d['doctor'] = d[['doctor_need', 'doctor_take']].apply(lambda x: max(x[0], x[1]), axis=1)
+  # d['hospital'] = d[['hospital_need', 'hospital_take']].apply(lambda x: max(x[0], x[1]), axis=1)
+  # namely get max of doctor_need and doctor_take similar for hospital. Do this because we want info on hospital visits regardless of
+  # actual leave taken or not
+  # report this new var doctor but not doctor1, similar for hospital
   
   # length of leave for most recent leave
   
@@ -285,6 +290,8 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(prop_pay = ifelse(A50 == 5, .875, prop_pay))
   d_fmla <- d_fmla %>% mutate(prop_pay = ifelse(A49 == 1, 1, prop_pay))
   d_fmla <- d_fmla %>% mutate(prop_pay = ifelse(A45 == 2, 0, prop_pay))
+  # [cz] you reported # 1s (prop_pay = 100%) while I reported # non-missings in tabulation
+  # your #1s and mine are the same so I think we are good on this var.
   
   # Adding values in leave program variables for starting condition (absence of program)
   # Leave Program Participation
@@ -337,7 +344,7 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(take_matdis = ifelse(is.na(take_matdis) == 1,0,take_matdis))
   d_fmla <- d_fmla %>% mutate(take_matdis = ifelse(is.na(A5_1_CAT) == 1 & is.na(A5_2_CAT) == 1, NA, take_matdis))
   d_fmla <- d_fmla %>% mutate(take_matdis = ifelse(is.na(take_matdis) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0, take_matdis))
-  
+  #[cz] d['take_matdis'] = np.where(np.isnan(d['take_matdis']) & (d['male'] == 1), 0, d['take_matdis'])
   d_fmla <- d_fmla %>% mutate(long_matdis = ifelse((A5_1_CAT == 21 & A11_1 == 1 & GENDER_CAT == 2) 
                                                                      | A5_1_CAT_rev == 32, 1, 0))
   d_fmla <- d_fmla %>% mutate(long_matdis = ifelse(is.na(long_matdis) == 1,0,long_matdis))
@@ -348,6 +355,8 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   d_fmla <- d_fmla %>% mutate(need_matdis = ifelse(is.na(need_matdis) == 1,0,need_matdis))
   d_fmla <- d_fmla %>% mutate(need_matdis = ifelse(is.na(B6_1_CAT) == 1, NA, need_matdis))
   d_fmla <- d_fmla %>% mutate(need_matdis = ifelse(is.na(need_matdis) == 1 & (LEAVE_CAT == 1 | LEAVE_CAT == 3),0, need_matdis))
+  # [cz] d['need_matdis'] = np.where(np.isnan(d['need_matdis']) & (d['male'] == 1), 0, d['need_matdis'])
+  # need_bond depend on need_matdis - above also fixes N for need_bond
   
   d_fmla <- d_fmla %>% mutate(type_matdis = ifelse((take_matdis == 1 | need_matdis == 1),1,0))
   d_fmla <- d_fmla %>% mutate(type_matdis = ifelse((is.na(take_matdis) == 1 | is.na(need_matdis) == 1),NA,type_matdis))
@@ -393,6 +402,11 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   # some more needers of this type are in the 2nd loop
   d_fmla <- d_fmla %>% mutate(need_own = ifelse(B6_2_CAT == 1,1,need_own))
   d_fmla <- d_fmla %>% mutate(need_own = ifelse(is.na(need_own)==1 & (LEAVE_CAT == 1 | LEAVE_CAT == 3),0,need_own))
+  # [cz] need loop2 is for second most recent - do you define need_own for most recent need or any need?
+  # I suggest defining need_own for most recent need for consistency with take_own
+  # therefore you don't need to consider B6_2_CAT at all.
+  # Also the loop2 part was done incorrectly in your code by overwriting previous line based on B6_1_CAT 
+  # d['need_own'] = np.where(d['B6_1_CAT'].isna(), np.nan, d['need_own'])
   
   d_fmla <- d_fmla %>% mutate(type_own = ifelse((take_own == 1 | need_own == 1),1,0))
   d_fmla <- d_fmla %>% mutate(type_own = ifelse((is.na(take_own) == 1 | is.na(need_own) == 1),NA,type_own))
@@ -411,7 +425,9 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   # some more needers of this type are in the 2nd loop
   d_fmla <- d_fmla %>% mutate(need_illchild = ifelse(B6_2_CAT == 11,1,need_illchild))
   d_fmla <- d_fmla %>% mutate(need_illchild = ifelse(is.na(need_illchild) == 1 & (LEAVE_CAT == 1 | LEAVE_CAT == 3),0,need_illchild))
-  
+  # [cz] similar issue as need_own. I suggest drop loop2.
+  # Also the loop2 part was done incorrectly in your code by overwriting previous line based on B6_1_CAT 
+
   d_fmla <- d_fmla %>% mutate(type_illchild = ifelse((take_illchild == 1 | need_illchild == 1),1,0))
   d_fmla <- d_fmla %>% mutate(type_illchild = ifelse((is.na(take_illchild) == 1 | is.na(need_illchild) == 1),NA,type_illchild))
   
@@ -421,13 +437,20 @@ clean_fmla <-function(d_fmla, save_csv=FALSE) {
   #ill spouse
   d_fmla <- d_fmla %>% mutate(take_illspouse = ifelse(reason_take == 12,1,0))
   d_fmla <- d_fmla %>% mutate(take_illspouse = ifelse(is.na(take_illspouse) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0,take_illspouse))
-  
+  # [cz] d['take_illspouse'] = np.where(np.isnan(d['take_illspouse']) & ((d['nevermarried'] == 1) |
+  #                                                                 (d['separated'] == 1) |
+  #                                                                 (d['divorced'] == 1) |
+  #                                                                 (d['widowed'] == 1)), 0, d['take_illspouse'])
+
   d_fmla <- d_fmla %>% mutate(long_illspouse = ifelse(long_reason == 12,1,0))
   d_fmla <- d_fmla %>% mutate(long_illspouse = ifelse(is.na(long_illspouse) == 1 & (LEAVE_CAT == 2 | LEAVE_CAT == 3),0,long_illspouse))
   
   d_fmla <- d_fmla %>% mutate(need_illspouse = ifelse(B6_1_CAT == 12,1,0))
   d_fmla <- d_fmla %>% mutate(need_illspouse = ifelse(is.na(need_illspouse) == 1 & (LEAVE_CAT == 1 | LEAVE_CAT == 3),0,need_illspouse))
-  
+  # [cz]   d['need_illspouse'] = np.where(np.isnan(d['need_illspouse']) & ((d['nevermarried'] == 1) |
+  #                                                                 (d['separated'] == 1) |
+  #                                                                 (d['divorced'] == 1) |
+  #                                                                 (d['widowed'] == 1)), 0, d['need_illspouse'])
   d_fmla <- d_fmla %>% mutate(type_illspouse = ifelse((take_illspouse == 1 | need_illspouse == 1),1,0))
   d_fmla <- d_fmla %>% mutate(type_illspouse = ifelse((is.na(take_illspouse) == 1 | is.na(need_illspouse) == 1),NA,type_illspouse))
   
